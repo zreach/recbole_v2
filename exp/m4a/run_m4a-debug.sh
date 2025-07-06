@@ -1,3 +1,3 @@
 model=${1:-"FM"}
 
-CUDA_VISIBLE_DEVICES="3" python run_recbole.py --dataset=m4a --config_files=configs/m4a/debug.yaml --model=$model --task_name=debug
+python run_recbole.py --dataset=m4a --config_files=configs/m4a/debug.yaml --model=$model --task_name=debug --gpu_id=3

@@ -1062,6 +1062,7 @@ class Dataset(torch.utils.data.Dataset):
         """Reset index for all feats in :attr:`feat_name_list`."""
         for feat_name in self.feat_name_list:
             # 这里每个feat是一个表格，就是文件的那个
+            print(feat_name)
             feat = getattr(self, feat_name)
             if feat.empty:
                 raise ValueError(

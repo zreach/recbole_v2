@@ -1,3 +1,3 @@
 model=${1:-"FM"}
 
-CUDA_VISIBLE_DEVICES="3" python run_recbole.py --dataset=m4a --config_files=configs/m4a/idonly.yaml --model=$model --task_name=idonly
+python run_recbole.py --dataset=m4a --config_files=configs/m4a/idonly.yaml --model=$model --task_name=idonly --gpu_id=3

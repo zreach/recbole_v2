@@ -13,13 +13,14 @@ LABEL_FIELD: label #指定标签域
 threshold:
     num_repeat: 2
 #指定从什么文件里读什么列，这里就是从ml-1m.inter里面读取user_id, item_id, rating, timestamp这四列,剩下的以此类推
+additonal_feat_suffix: [cluster]
 load_col:
     inter: [user_id, tracks_id, num_repeat]
-    user: [user_id, ]
-    item: []
+    user: [user_id, gender, country]
+    item: [tracks_id, artist_id, feature_1, feature_2, feature_3, feature_4, feature_5, feature_6, feature_7, feature_8, feature_9, feature_10, feature_11, feature_12]
 
-user_inter_num_interval: [5,1000000]
-item_inter_num_interval: [5,1000000] 
+user_inter_num_interval: [20,1000000]
+item_inter_num_interval: [20,1000000] 
 # training settings
 epochs: 500 #训练的最大轮数
 # train_batch_size: 64 #训练的batch_size
@@ -30,9 +31,12 @@ eval_step: 1 #每次训练后做evalaution的次数
 stopping_step: 10 #控制训练收敛的步骤数，在该步骤数内若选取的评测标准没有什么变化，就可以提前停止了
 # embedding_size: 10
 # use_cb: true
-no_itemid: true
-# a_feature_path: "dataset/msd/muq-mean.pkl"
-# map_path: "dataset/lfm1b-fil/map.pkl"
+# no_itemid: true
+# a_feature_path: "/home/zhouyz/recbole-new-main/dataset/msd/muq-mean.pkl"
+map_path: "dataset/lfm1b-fil/map.pkl"
+# cluster_path: "/home/zhouyz/recbole-new-main/dataset/msd/muq-down-clustered.csv"
+
+
 # wav_mlp_sizes: []
 wav_mlp_sizes: [512, 32]
 

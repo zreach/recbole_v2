@@ -75,8 +75,9 @@ def init_logger(config):
     LOGROOT = "./log/"
     dir_name = os.path.dirname(LOGROOT)
     ensure_dir(dir_name)
-    model_name = os.path.join(dir_name, config["model"])
-    ensure_dir(model_name)
+    dataset_path = os.path.join(dir_name, config["dataset"])
+    model_path = os.path.join(dataset_path, config["model"])
+    ensure_dir(model_path)
     config_str = "".join([str(key) for key in config.final_config_dict.values()])
     md5 = hashlib.md5(config_str.encode(encoding="utf-8")).hexdigest()[:6]
     
@@ -91,8 +92,8 @@ def init_logger(config):
     #     )
     if config['task_name'] is None:
         config['task_name'] = 'default'
-    logfilename = "{}/{}-{}-{}-{}-{}.log".format(
-            config["model"], config["model"], config["dataset"], config['task_name'], get_local_time(), md5
+    logfilename = "{}/{}/{}-{}-{}-{}-{}.log".format(
+            config["dataset"], config["model"], config["model"], config["dataset"], config['task_name'], get_local_time(), md5
         )
     logfilepath = os.path.join(LOGROOT, logfilename)
 

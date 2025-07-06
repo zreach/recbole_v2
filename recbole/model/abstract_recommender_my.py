@@ -22,6 +22,7 @@ import pickle
 from recbole.model.layers import FMEmbedding, FMFirstOrderLinear, FLEmbedding
 from recbole.utils import ModelType, InputType, FeatureSource, FeatureType, set_color
 from recbole.model.layers import MLPLayers
+from recbole.model.loss import RegLoss
 
 class AbstractRecommender(nn.Module):
     r"""Base class for all models"""
@@ -155,6 +156,7 @@ class SequentialRecommender(AbstractRecommender):
         super(SequentialRecommender, self).__init__()
 
         # load dataset info
+        
         self.USER_ID = config["USER_ID_FIELD"]
         self.ITEM_ID = config["ITEM_ID_FIELD"]
         self.ITEM_SEQ = self.ITEM_ID + config["LIST_SUFFIX"]
@@ -246,6 +248,7 @@ class ContextRecommender(AbstractRecommender):
                 ]
             )
         # 如果
+        self.config = config
         self.LABEL = config["LABEL_FIELD"]
         self.embedding_size = config["embedding_size"]
         self.device = config["device"]
@@ -412,7 +415,17 @@ class ContextRecommender(AbstractRecommender):
 
         return features_tensor.to(torch.float32).to(self.device)
 
-
+    def reg_emb_loss(self):
+        # 先默认是给embedding的正则化
+        reg_term = 0
+        reg_pairs = [(2, self.config['reg_emb'])]
+        for m_name, module in self.named_modules():
+                if type(module) in [FMEmbedding, FLEmbedding]:
+                    for p_name, param in module.named_parameters():
+                        if param.requires_grad:
+                            for emb_p, emb_lambda in reg_pairs:
+                                reg_term += (emb_lambda) * torch.norm(param, emb_p) ** emb_p
+        return reg_term
     def embed_float_fields(self, float_fields):
         """Embed the float feature columns
 

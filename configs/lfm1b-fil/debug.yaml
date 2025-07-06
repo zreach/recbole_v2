@@ -18,8 +18,8 @@ load_col:
     user: [user_id, ]
     item: []
 
-user_inter_num_interval: [5,1000000]
-item_inter_num_interval: [5,1000000] 
+user_inter_num_interval: [20,1000000]
+item_inter_num_interval: [20,1000000] 
 # training settings
 epochs: 500 #训练的最大轮数
 # train_batch_size: 64 #训练的batch_size

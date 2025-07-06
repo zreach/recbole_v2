@@ -58,7 +58,7 @@ class FM(ContextRecommender):
         label = interaction[self.LABEL]
 
         output = self.forward(interaction)
-        return self.loss(output, label)
+        return self.loss(output, label) # + self.reg_loss()
 
     def predict(self, interaction):
         return self.sigmoid(self.forward(interaction))

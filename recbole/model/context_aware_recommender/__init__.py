@@ -13,7 +13,11 @@ from recbole.model.context_aware_recommender.nfm import NFM
 from recbole.model.context_aware_recommender.pnn import PNN
 from recbole.model.context_aware_recommender.widedeep import WideDeep
 from recbole.model.context_aware_recommender.xdeepfm import xDeepFM
+from recbole.model.context_aware_recommender.masknet import MaskNet
 from recbole.model.context_aware_recommender.fignn import FiGNN
 from recbole.model.context_aware_recommender.kd_dagfm import KD_DAGFM
 from recbole.model.context_aware_recommender.eulernet import EulerNet
 from recbole.model.context_aware_recommender.ctrrandom import CTRRandom
+from recbole.model.context_aware_recommender.dualmlp import DualMLP
+from recbole.model.context_aware_recommender.wukong import WuKong
+from recbole.model.context_aware_recommender.afn import AFN

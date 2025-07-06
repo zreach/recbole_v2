@@ -15,26 +15,36 @@ threshold:
 #指定从什么文件里读什么列，这里就是从ml-1m.inter里面读取user_id, item_id, rating, timestamp这四列,剩下的以此类推
 load_col:
     inter: [user_id, tracks_id, num_repeat]
-    user: [user_id, ]
-    item: []
+    user: [user_id]
+    item: [tracks_id, key, mode, popularity, release, danceability, energy]
+
+numerical_features: [popularity, release, danceability, energy] #不加这个float特征不会被计算
+discretization:
+    popularity:
+        method: LD
+        bucket: 10
+    release:
+        method: LD
+        bucket: 10
+    danceability:
+        method: LD
+        bucket: 10
+    energy:
+        method: LD
+        bucket: 10
 
 user_inter_num_interval: [5,1000000]
 item_inter_num_interval: [5,1000000] 
+
 # training settings
 epochs: 500 #训练的最大轮数
 # train_batch_size: 64 #训练的batch_size
 learner: adam #使用的pytorch内置优化器
-learning_rate: 0.001 #学习率
+learning_rate: 0.005 #学习率
 # training_neg_sample_num: 0 #负采样数目
 eval_step: 1 #每次训练后做evalaution的次数
 stopping_step: 10 #控制训练收敛的步骤数，在该步骤数内若选取的评测标准没有什么变化，就可以提前停止了
-# embedding_size: 10
-# use_cb: true
-no_itemid: true
-# a_feature_path: "dataset/msd/muq-mean.pkl"
-# map_path: "dataset/lfm1b-fil/map.pkl"
-# wav_mlp_sizes: []
-wav_mlp_sizes: [512, 32]
+embedding_size: 10
 
 neg_my: true
 train_neg_sample_args:
@@ -44,4 +54,6 @@ eval_args:
     mode:
         valid: my_uni
         test: my_uni
+# user_inter_num_interval: [50,10000]
+# item_inter_num_interval: [50,10000]
 # numerical_features: [age, playcount] #不加这个float特征不会被计算

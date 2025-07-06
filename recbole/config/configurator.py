@@ -551,7 +551,9 @@ class Config(object):
             raise ValueError(f"mode [{eval_mode}] in eval_args should be a str.")
         if eval_mode == "labeled":
             eval_neg_sample_args = {"distribution": "none", "sample_num": "none"}
-        elif eval_mode == "labeled_my":
+        elif eval_mode == "my_pop":
+            eval_neg_sample_args = {"distribution": "popularity", "sample_num": 1}
+        elif eval_mode == "my_uni":
             eval_neg_sample_args = {"distribution": "popularity", "sample_num": 1}
         elif eval_mode == "full":
             eval_neg_sample_args = {"distribution": "uniform", "sample_num": "none"}

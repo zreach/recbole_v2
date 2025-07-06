@@ -18,8 +18,8 @@ load_col:
     user: [user_id, ]
     item: []
 
-user_inter_num_interval: [5,1000000]
-item_inter_num_interval: [5,1000000] 
+user_inter_num_interval: [20,1000000]
+item_inter_num_interval: [20,1000000] 
 # training settings
 epochs: 500 #训练的最大轮数
 # train_batch_size: 64 #训练的batch_size
@@ -29,10 +29,10 @@ learning_rate: 0.001 #学习率
 eval_step: 1 #每次训练后做evalaution的次数
 stopping_step: 10 #控制训练收敛的步骤数，在该步骤数内若选取的评测标准没有什么变化，就可以提前停止了
 # embedding_size: 10
-# use_cb: true
+use_cb: true
 no_itemid: true
-# a_feature_path: "dataset/msd/muq-mean.pkl"
-# map_path: "dataset/lfm1b-fil/map.pkl"
+a_feature_path: "dataset/msd/muq-mean.pkl"
+map_path: "dataset/lfm1b-fil/map.pkl"
 # wav_mlp_sizes: []
 wav_mlp_sizes: [512, 32]
 

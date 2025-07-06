@@ -1,0 +1,7 @@
+embedding_size: 10                # (int) The embedding size of features.
+mlp_hidden_size: [128, 128, 128]  # (list of int) The hidden size of MLP layers.  
+dropout_prob: 0                 # (float) The dropout rate.
+ensemble_dnn: False
+logarithmic_neurons: 160
+reg_emb: 1e-8
+# learning_rate: 0.001
