@@ -22,23 +22,23 @@ load_col:
 # item_inter_num_interval: [20,1000000] 
 
 # training settings
-epochs: 2 #训练的最大轮数
-train_batch_size: 16 #训练的batch_size
+epochs: 10 #训练的最大轮数
+train_batch_size: 1 #训练的batch_size
 learner: adam #使用的pytorch内置优化器
 learning_rate: 1e-3 #学习率
 # training_neg_sample_num: 0 #负采样数目
-eval_step: 1 #每次训练后做evalaution的次数
+eval_step: 0 #每次训练后做evalaution的次数
 stopping_step: 10 #控制训练收敛的步骤数，在该步骤数内若选取的评测标准没有什么变化，就可以提前停止了
 embedding_size: 10
 
-neg_my: true
-train_neg_sample_args:
-    distribution: "uniform"
-    sample_num: 1
-eval_args:
-    mode:
-        valid: my_uni
-        test: my_uni
+neg_my: false
+# train_neg_sample_args:
+#     distribution: "uniform"
+#     sample_num: 1
+# eval_args:
+#     mode:
+#         valid: my_uni
+#         test: my_uni
 # user_inter_num_interval: [50,10000]
 # item_inter_num_interval: [50,10000]
 # numerical_features: [age, playcount] #不加这个float特征不会被计算

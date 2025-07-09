@@ -133,6 +133,9 @@ def run_recbole(
 
     # dataset splitting
     train_data, valid_data, test_data = data_preparation(config, dataset)
+    logger.info(f"Train dataloader size: {len(train_data)}")
+    logger.info(f"Valid dataloader size: {len(valid_data)}")
+    logger.info(f"Test dataloader size: {len(test_data)}")
     # import pdb; pdb.set_trace()
     # model loading and initialization
     init_seed(config["seed"] + config["local_rank"], config["reproducibility"])
@@ -140,8 +143,8 @@ def run_recbole(
     logger.info(model)
 
     transform = construct_transform(config)
-    flops = get_flops(model, dataset, config["device"], logger, transform)
-    logger.info(set_color("FLOPs", "blue") + f": {flops}")
+    # flops = get_flops(model, dataset, config["device"], logger, transform)
+    # logger.info(set_color("FLOPs", "blue") + f": {flops}")
 
     # trainer loading and initialization
     trainer = get_trainer(config["MODEL_TYPE"], config["model"])(config, model)

@@ -265,6 +265,11 @@ class ContextRecommender(AbstractRecommender):
         self.float_seq_field_names = []
         self.float_seq_field_dims = []
         self.num_feature_field = 0
+
+        self.USER_ID = config["USER_ID_FIELD"]
+        self.ITEM_ID = config["ITEM_ID_FIELD"]
+        self.n_users = dataset.num(self.USER_ID)
+        self.n_items = dataset.num(self.ITEM_ID)
         
         self.token2id = dataset.field2token_id
         self.id2token = {}
@@ -305,6 +310,7 @@ class ContextRecommender(AbstractRecommender):
                 # assert len(feature.shape) == 1
                 music_features[v] = torch.Tensor(feature)
             # music_features = torch.load('/user/zhouyz/rec/myRec/wav2feature.pt')
+            self.a_feats = music_features
             self.id2feature = nn.Embedding.from_pretrained(music_features)
             self.id2feature.requires_grad_(False)
         
@@ -399,6 +405,7 @@ class ContextRecommender(AbstractRecommender):
             self.wav_mlp = MLPLayers(size_list, 0.2)
             # self.wav_fc = nn.Linear(1024, self.embedding_size)
             self.num_feature_field += 1
+    
     def get_music_features(self, track_ids):
         # 返回Tensor的feature
         # TODO : 利用并行加速

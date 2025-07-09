@@ -29,7 +29,7 @@ class AFN(ContextRecommender):
         ] + self.mlp_hidden_size + [1]
         # self.mlp_layers = MLPLayers(size_list, self.dropout_prob)
         self.dense_layers = MLPLayers(
-            size_list, self.dropout_prob, activation='relu', bn=True
+            size_list, self.dropout_prob, activation='relu', bn=False
         )
         self.coefficient_W = nn.Linear(self.num_feature_field, self.logarithmic_neurons, bias=False)
 
@@ -58,10 +58,10 @@ class AFN(ContextRecommender):
         emb = torch.abs(emb)
         emb = torch.clamp(emb, min=1e-5)
         log_emb = torch.log(emb)
-        log_emb = self.log_batch_norm(log_emb)
+        # log_emb = self.log_batch_norm(log_emb)
         log_out = self.coefficient_W(log_emb.transpose(2, 1)).transpose(1, 2)
         cross_out = torch.exp(log_out)
-        cross_out = self.exp_batch_norm(cross_out)
+        # cross_out = self.exp_batch_norm(cross_out)
         concat_out = torch.flatten(cross_out, start_dim=1)
         return concat_out
     
