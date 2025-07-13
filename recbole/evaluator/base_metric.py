@@ -38,6 +38,8 @@ class AbstractMetric(object):
         Returns:
             dict: such as ``{'metric@10': 3153, 'metric@20': 0.3824}``
         """
+        # 外部调用的主函数
+        
         raise NotImplementedError("Method [calculate_metric] should be implemented.")
 
 

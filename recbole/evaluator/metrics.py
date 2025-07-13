@@ -159,7 +159,38 @@ class Recall(TopkMetric):
     def metric_info(self, pos_index, pos_len):
         return np.cumsum(pos_index, axis=1) / pos_len.reshape(-1, 1)
 
+class NDCG_CTR(LossMetric):
+    def __init__(self, config):
+        super().__init__(config)
+        self.k = config["topk"][0] # TODO 列表
+        
+    
+    def calculate_metric(self, dataobject):
+        return self.output_metric("ndcg", dataobject)
 
+    def metric_info(self, preds, trues):
+        sorted_indices = np.argsort(preds)[::-1]
+        ranked_trues = trues[sorted_indices]
+        print(self.k)
+        top_k_trues = ranked_trues[:self.k]
+
+        # Calculate DCG@k
+        positions = np.arange(1, len(top_k_trues) + 1)
+        dcg = np.sum(top_k_trues / np.log2(positions + 1))
+
+        # Calculate IDCG@k
+        # Sort true relevance scores in descending order for the ideal ranking
+        ideal_sorted_trues = np.sort(trues)[::-1]
+        ideal_top_k_trues = ideal_sorted_trues[:self.k]
+
+        ideal_positions = np.arange(1, len(ideal_top_k_trues) + 1)
+        idcg = np.sum(ideal_top_k_trues / np.log2(ideal_positions + 1))
+
+        if idcg == 0:
+            return 0.0
+    
+        ndcg = dcg / idcg
+        return ndcg
 class NDCG(TopkMetric):
     r"""NDCG_ (also known as normalized discounted cumulative gain) is a measure of ranking quality,
     where positions are discounted logarithmically. It accounts for the position of the hit by assigning
@@ -342,6 +373,7 @@ class AUC(LossMetric):
         super().__init__(config)
 
     def calculate_metric(self, dataobject):
+        
         return self.output_metric("auc", dataobject)
 
     def metric_info(self, preds, trues):

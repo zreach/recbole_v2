@@ -16,13 +16,13 @@ threshold:
 load_col:
     inter: [user_id, tracks_id, num_repeat]
     user: [user_id]
-    item: [tracks_id]
+    item: []
 
 user_inter_num_interval: [5,1000000]
 item_inter_num_interval: [5,1000000] 
 
 # training settings
-epochs: 10 #训练的最大轮数
+epochs: 500 #训练的最大轮数
 # train_batch_size: 64 #训练的batch_size
 learner: adam #使用的pytorch内置优化器
 learning_rate: 0.005 #学习率
@@ -30,6 +30,13 @@ learning_rate: 0.005 #学习率
 eval_step: 1 #每次训练后做evalaution的次数
 stopping_step: 10 #控制训练收敛的步骤数，在该步骤数内若选取的评测标准没有什么变化，就可以提前停止了
 embedding_size: 10
+
+# audio相关
+use_cb: true
+no_itemid: true
+a_feature_path: "dataset/m4a-fil/m4a-muq-last.pkl"
+map_path: "dataset/m4a-fil/id2spot.pkl"
+wav_mlp_sizes: [512, 32]
 
 neg_my: true
 train_neg_sample_args:

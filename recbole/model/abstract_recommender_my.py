@@ -298,17 +298,22 @@ class ContextRecommender(AbstractRecommender):
             music_features_array['[PAD]'] = np.zeros((self.wav_embedding_size))
             
             music_features = torch.zeros((len(self.token2id['tracks_id']), self.wav_embedding_size ))
-            
-            for k, v in self.token2id['tracks_id'].items():
-                k = self.id2msd[k]
-                self.id2token[v] = k
-                feature = music_features_array[k]
-                # if len(feature.shape) == 1:
-                #     feature = feature.reshape(1, -1)
-                # if len(feature.shape) == 3:
-                #     feature = feature[0]
-                # assert len(feature.shape) == 1
-                music_features[v] = torch.Tensor(feature)
+            if config['dataset'] == 'lfm1b-fil':
+                for k, v in self.token2id['tracks_id'].items():
+                    k = self.id2msd[k]
+                    self.id2token[v] = k
+                    feature = music_features_array[k]
+                    # if len(feature.shape) == 1:
+                    #     feature = feature.reshape(1, -1)
+                    # if len(feature.shape) == 3:
+                    #     feature = feature[0]
+                    # assert len(feature.shape) == 1
+                    music_features[v] = torch.Tensor(feature)
+            elif config['dataset'] == 'm4a-fil':
+                for k, v in self.token2id['tracks_id'].items():
+                    self.id2token[v] = k
+                    feature = music_features_array[k]
+                    music_features[v] = torch.Tensor(feature)
             # music_features = torch.load('/user/zhouyz/rec/myRec/wav2feature.pt')
             self.a_feats = music_features
             self.id2feature = nn.Embedding.from_pretrained(music_features)

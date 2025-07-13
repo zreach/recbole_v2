@@ -4,5 +4,6 @@ eval_args:
   group_by: ~
   mode: labeled
 train_neg_sample_args: ~
-metrics: ['AUC', 'LogLoss']
+metrics: ['AUC', 'LogLoss', 'NDCG_CTR']
 valid_metric: AUC
+topk: 10
