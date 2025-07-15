@@ -110,6 +110,64 @@ class GeneralRecommender(AbstractRecommender):
         # load parameters info
         self.device = config["device"]
 
+class GeneralRecommender_my(AbstractRecommender):
+    """This is a abstract general recommender. All the general model should implement this class.
+    The base general recommender class provide the basic dataset and parameters information.
+    """
+
+    type = ModelType.GENERAL
+
+    def __init__(self, config, dataset):
+        super(GeneralRecommender_my, self).__init__()
+
+        # load dataset info
+        self.USER_ID = config["USER_ID_FIELD"]
+        self.ITEM_ID = config["ITEM_ID_FIELD"]
+        self.NEG_ITEM_ID = config["NEG_PREFIX"] + self.ITEM_ID
+        self.n_users = dataset.num(self.USER_ID)
+        self.n_items = dataset.num(self.ITEM_ID)
+
+        # load parameters info
+        self.device = config["device"]
+        
+        # multimodal
+        self.use_cb = config['use_cb']
+
+        if self.use_cb:
+            map_path = config['map_path']
+            with open(map_path, 'rb') as fp:
+                self.id2msd = pickle.load(fp)
+            self.id2msd = {str(k): v for k, v in self.id2msd.items()}
+            self.id2msd['[PAD]'] = '[PAD]'
+
+            a_feature_path = config['a_feature_path']
+            with open(a_feature_path, 'rb') as fp:
+                music_features_array = pickle.load(fp)
+            
+            self.wav_embedding_size = list(music_features_array.values())[0].shape[-1]
+            music_features_array['[PAD]'] = np.zeros((self.wav_embedding_size))
+            
+            music_features = torch.zeros((len(self.token2id['tracks_id']), self.wav_embedding_size ))
+            if config['dataset'] == 'lfm1b-fil':
+                for k, v in self.token2id['tracks_id'].items():
+                    k = self.id2msd[k]
+                    self.id2token[v] = k
+                    feature = music_features_array[k]
+                    # if len(feature.shape) == 1:
+                    #     feature = feature.reshape(1, -1)
+                    # if len(feature.shape) == 3:
+                    #     feature = feature[0]
+                    # assert len(feature.shape) == 1
+                    music_features[v] = torch.Tensor(feature)
+            elif config['dataset'] == 'm4a-fil':
+                for k, v in self.token2id['tracks_id'].items():
+                    self.id2token[v] = k
+                    feature = music_features_array[k]
+                    music_features[v] = torch.Tensor(feature)
+            # music_features = torch.load('/user/zhouyz/rec/myRec/wav2feature.pt')
+            self.a_feats = music_features
+            self.id2feature = nn.Embedding.from_pretrained(music_features)
+            self.id2feature.requires_grad_(False)
 
 class AutoEncoderMixin(object):
     """This is a common part of auto-encoders. All the auto-encoder models should inherit this class,

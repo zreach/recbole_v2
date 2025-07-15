@@ -8,10 +8,10 @@ import torch.nn.functional as F
 
 
 from recbole.model.utils.utils import build_sim, compute_normalized_laplacian, build_knn_neighbourhood
-from recbole.model.abstract_recommender_my import ContextRecommender
+from recbole.model.abstract_recommender_my import GeneralRecommender_my
 # from recbole.model.layers import MLPLayers
 # from recbole.model.loss import RegLoss
-class LATTICE(ContextRecommender):
+class LATTICE(GeneralRecommender_my):
     def __init__(self, config, dataset):
         super(LATTICE, self).__init__(config, dataset)
 
