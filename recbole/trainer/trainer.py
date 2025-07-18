@@ -216,6 +216,8 @@ class Trainer(AbstractTrainer):
             tuple which includes the sum of loss in each part.
         """
         self.model.train()
+        if hasattr(self.model, "pre_epoch_processing"):
+            self.model.pre_epoch_processing()
         loss_func = loss_func or self.model.calculate_loss
         total_loss = None
         iter_data = (

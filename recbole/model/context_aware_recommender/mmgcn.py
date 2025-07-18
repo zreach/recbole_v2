@@ -11,9 +11,9 @@ import torch_geometric
 from recbole.model.abstract_recommender_my import ContextRecommender
 # from recbole.model.layers import MLPLayers
 # from recbole.model.loss import RegLoss
-class MMGCN(ContextRecommender):
+class MMGCN_CTR(ContextRecommender):
     def __init__(self, config, dataset):
-        super(MMGCN, self).__init__(config, dataset)
+        super(MMGCN_CTR, self).__init__(config, dataset)
         self.num_user = self.n_users
         self.num_item = self.n_items
         num_user = self.n_users

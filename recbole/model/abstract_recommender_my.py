@@ -131,6 +131,8 @@ class GeneralRecommender_my(AbstractRecommender):
         self.device = config["device"]
         
         # multimodal
+        self.token2id = dataset.field2token_id
+        self.id2token = {}
         self.use_cb = config['use_cb']
 
         if self.use_cb:
@@ -148,22 +150,33 @@ class GeneralRecommender_my(AbstractRecommender):
             music_features_array['[PAD]'] = np.zeros((self.wav_embedding_size))
             
             music_features = torch.zeros((len(self.token2id['tracks_id']), self.wav_embedding_size ))
-            if config['dataset'] == 'lfm1b-fil':
+            if config['dataset'] in ['lfm1b-fil', 'm4a-fil']:
                 for k, v in self.token2id['tracks_id'].items():
+                    # if config['dataset'] == 'm4a-fil':
+                    #     k = str(k)
                     k = self.id2msd[k]
                     self.id2token[v] = k
-                    feature = music_features_array[k]
-                    # if len(feature.shape) == 1:
-                    #     feature = feature.reshape(1, -1)
-                    # if len(feature.shape) == 3:
-                    #     feature = feature[0]
-                    # assert len(feature.shape) == 1
+                    if k == '[PAD]':
+                        feature = np.zeros((self.wav_embedding_size))
+                    else:
+                        layer = config['afeat_layer']
+                        if layer is not None:
+                            feature = music_features_array[k][layer]
+                        else:
+                            feature = music_features_array[k]
+                    # print('layer', layer)
                     music_features[v] = torch.Tensor(feature)
-            elif config['dataset'] == 'm4a-fil':
+            elif config['dataset'] == 'm4a': # 这个数据没有时间维度， 而且不需要map
                 for k, v in self.token2id['tracks_id'].items():
                     self.id2token[v] = k
-                    feature = music_features_array[k]
-                    music_features[v] = torch.Tensor(feature)
+                    if k == '[PAD]':
+                        feature = np.zeros((self.wav_embedding_size))
+                    else:
+                        layer = config['afeat_layer']
+                        if layer is not None:
+                            feature = music_features_array[k][layer]
+                        else:
+                            feature = music_features_array[k]
             # music_features = torch.load('/user/zhouyz/rec/myRec/wav2feature.pt')
             self.a_feats = music_features
             self.id2feature = nn.Embedding.from_pretrained(music_features)
@@ -337,16 +350,8 @@ class ContextRecommender(AbstractRecommender):
         # self.feature_type = config['wav_feature_type']
         if self.use_cb is None:
             self.use_cb = False
-        # if self.feature_type is None:
-        #     self.feature_type = 'CLAP'
-        # with open('/user/zhouyz/rec/myRec/features_id.pkl', 'rb') as fp:
-        #     self.music_features = pickle.load(fp)
+
         if self.use_cb:
-            map_path = config['map_path']
-            with open(map_path, 'rb') as fp:
-                self.id2msd = pickle.load(fp)
-            self.id2msd = {str(k): v for k, v in self.id2msd.items()}
-            self.id2msd['[PAD]'] = '[PAD]'
 
             a_feature_path = config['a_feature_path']
             with open(a_feature_path, 'rb') as fp:
@@ -356,22 +361,36 @@ class ContextRecommender(AbstractRecommender):
             music_features_array['[PAD]'] = np.zeros((self.wav_embedding_size))
             
             music_features = torch.zeros((len(self.token2id['tracks_id']), self.wav_embedding_size ))
-            if config['dataset'] == 'lfm1b-fil':
+            if config['dataset'] in ['lfm1b-fil', 'm4a-fil']:
+                map_path = config['map_path']
+                with open(map_path, 'rb') as fp:
+                    self.id2msd = pickle.load(fp)
+                self.id2msd = {str(k): v for k, v in self.id2msd.items()}
+                self.id2msd['[PAD]'] = '[PAD]'
                 for k, v in self.token2id['tracks_id'].items():
                     k = self.id2msd[k]
                     self.id2token[v] = k
-                    feature = music_features_array[k]
-                    # if len(feature.shape) == 1:
-                    #     feature = feature.reshape(1, -1)
-                    # if len(feature.shape) == 3:
-                    #     feature = feature[0]
-                    # assert len(feature.shape) == 1
+                    if k == '[PAD]':
+                        feature = np.zeros((self.wav_embedding_size))
+                    else:
+                        layer = config['afeat_layer']
+                        if layer is not None:
+                            feature = music_features_array[k][layer]
+                        else:
+                            feature = music_features_array[k]
+                    # print('layer', layer)
                     music_features[v] = torch.Tensor(feature)
-            elif config['dataset'] == 'm4a-fil':
+            elif config['dataset'] == 'm4a':
                 for k, v in self.token2id['tracks_id'].items():
                     self.id2token[v] = k
-                    feature = music_features_array[k]
-                    music_features[v] = torch.Tensor(feature)
+                    if k == '[PAD]':
+                        feature = np.zeros((self.wav_embedding_size))
+                    else:
+                        layer = config['afeat_layer']
+                        if layer is not None:
+                            feature = music_features_array[k][layer]
+                        else:
+                            feature = music_features_array[k]
             # music_features = torch.load('/user/zhouyz/rec/myRec/wav2feature.pt')
             self.a_feats = music_features
             self.id2feature = nn.Embedding.from_pretrained(music_features)

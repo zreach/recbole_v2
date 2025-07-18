@@ -1,0 +1,1 @@
+CUDA_VISIBLE_DEVICES="2" python run_hyper.py --dataset=m4a --config_files=configs/m4a/aonly.yaml --model=FM --task_name=aonly --params_file=hyper-layer.test

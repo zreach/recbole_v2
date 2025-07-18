@@ -9,11 +9,17 @@ import torch.nn.functional as F
 
 from recbole.model.utils.utils import build_sim, compute_normalized_laplacian, build_knn_neighbourhood
 from recbole.model.abstract_recommender_my import GeneralRecommender_my
+from recbole.utils import InputType
 # from recbole.model.layers import MLPLayers
 # from recbole.model.loss import RegLoss
 class LATTICE(GeneralRecommender_my):
+    
+    input_type = InputType.PAIRWISE
+
     def __init__(self, config, dataset):
         super(LATTICE, self).__init__(config, dataset)
+
+        
 
         self.embedding_dim = config['embedding_size']
         self.feat_embed_dim = config['feat_embed_dim']
@@ -23,6 +29,8 @@ class LATTICE(GeneralRecommender_my):
         self.cf_model = config['cf_model']
         self.n_layers = config['n_layers']
         self.reg_weight = config['reg_weight']
+        self.batch_size = config['train_batch_size']
+
         self.build_item_graph = True
         self.loss = nn.BCEWithLogitsLoss()
         self.sigmoid = nn.Sigmoid()
@@ -49,7 +57,7 @@ class LATTICE(GeneralRecommender_my):
                 self.Bi_Linear_list.append(nn.Linear(self.weight_size[i], self.weight_size[i + 1]))
                 self.dropout_list.append(nn.Dropout(dropout_list[i]))
 
-        dataset_path = os.path.abspath(config['data_path'] + config['dataset'])
+        dataset_path = os.path.abspath(config['data_path'])
         audio_adj_file = os.path.join(dataset_path, 'audio_adj_{}.pt'.format(self.knn_k))
         # text_adj_file = os.path.join(dataset_path, 'text_adj_{}.pt'.format(self.knn_k))
 
@@ -195,9 +203,9 @@ class LATTICE(GeneralRecommender_my):
         return mf_loss, emb_loss, reg_loss
 
     def calculate_loss(self, interaction):
-        users = interaction[0]
-        pos_items = interaction[1]
-        neg_items = interaction[2]
+        users = interaction[self.USER_ID]
+        pos_items = interaction[self.ITEM_ID]
+        neg_items = interaction[self.NEG_ITEM_ID]
 
         ua_embeddings, ia_embeddings = self.forward(self.norm_adj, build_item_graph=self.build_item_graph)
         self.build_item_graph = False
@@ -211,7 +219,7 @@ class LATTICE(GeneralRecommender_my):
         return batch_mf_loss + batch_emb_loss + batch_reg_loss
 
     def full_sort_predict(self, interaction):
-        user = interaction[0]
+        user = interaction[self.USER_ID]
 
         restore_user_e, restore_item_e = self.forward(self.norm_adj, build_item_graph=True)
         u_embeddings = restore_user_e[user]

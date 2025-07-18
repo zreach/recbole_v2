@@ -1,1 +1,1 @@
-CUDA_VISIBLE_DEVICES="3" python extract_features.py --folder_path /data2/zhouyz/rec/MSD --output_path /data2/zhouyz/rec/MSD/muq-alllayers-mean/ 
+CUDA_VISIBLE_DEVICES="2" python extract_features-clip30s.py --folder_path /data2/zhouyz/rec/MSD --output_path /data2/zhouyz/rec/MSD/muq-alllayers-mean-m4afil/ 

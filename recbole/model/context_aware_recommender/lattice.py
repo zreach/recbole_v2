@@ -11,9 +11,9 @@ from recbole.model.utils.utils import build_sim, compute_normalized_laplacian, b
 from recbole.model.abstract_recommender_my import ContextRecommender
 # from recbole.model.layers import MLPLayers
 # from recbole.model.loss import RegLoss
-class LATTICE(ContextRecommender):
+class LATTICE_CTR(ContextRecommender):
     def __init__(self, config, dataset):
-        super(LATTICE, self).__init__(config, dataset)
+        super(LATTICE_CTR, self).__init__(config, dataset)
 
         self.embedding_dim = config['embedding_size']
         self.feat_embed_dim = config['feat_embed_dim']

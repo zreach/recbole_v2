@@ -21,4 +21,5 @@ from recbole.model.context_aware_recommender.ctrrandom import CTRRandom
 from recbole.model.context_aware_recommender.dualmlp import DualMLP
 from recbole.model.context_aware_recommender.wukong import WuKong
 from recbole.model.context_aware_recommender.afn import AFN
-from recbole.model.context_aware_recommender.mmgcn import MMGCN
+from recbole.model.context_aware_recommender.mmgcn import MMGCN_CTR
+from recbole.model.context_aware_recommender.lattice import LATTICE_CTR

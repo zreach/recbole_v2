@@ -33,11 +33,8 @@ embedding_size: 10
 
 # audio相关
 use_cb: true
-afeat_layer: 11
-no_itemid: true
-# a_feature_path: "dataset/m4a-fil/m4a-muq-last.pkl"
-a_feature_path: "dataset/m4a-fil/muq-alllayers-mean-m4afil.pkl"
-map_path: "dataset/m4a-fil/id2msd.pkl"
+a_feature_path: "dataset/m4a-fil/m4a-muq-last.pkl"
+map_path: "dataset/m4a-fil/id2spot.pkl"
 wav_mlp_sizes: [512, 32]
 
 neg_my: true

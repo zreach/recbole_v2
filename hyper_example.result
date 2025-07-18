@@ -1,60 +1,72 @@
-embedding_size:40, learning_rate:0.0005, train_batch_size:2048, wav_mlp_sizes:[512,32]
+afeat_layer:0, embedding_size:32, learning_rate:0.1
 Valid result:
-auc : 0.8152    logloss : 0.4433
+auc : 0.6062    logloss : 0.4445    ndcg : 0.5869
 Test result:
-auc : 0.8152    logloss : 0.4431
+auc : 0.6043    logloss : 0.4459    ndcg : 0.5869
 
-embedding_size:20, learning_rate:0.01, train_batch_size:1024, wav_mlp_sizes:[512,32]
+afeat_layer:11, embedding_size:64, learning_rate:0.001
 Valid result:
-auc : 0.8038    logloss : 0.4656
+auc : 0.6425    logloss : 0.4247    ndcg : 0.2876
 Test result:
-auc : 0.8038    logloss : 0.4652
+auc : 0.6422    logloss : 0.4256    ndcg : 0.2876
 
-embedding_size:10, learning_rate:0.0005, train_batch_size:2048, wav_mlp_sizes:[512,128,32]
+afeat_layer:8, embedding_size:32, learning_rate:0.01
 Valid result:
-auc : 0.8106    logloss : 0.4368
+auc : 0.6402    logloss : 0.4256    ndcg : 0.4517
 Test result:
-auc : 0.8095    logloss : 0.4375
+auc : 0.6396    logloss : 0.4266    ndcg : 0.4517
 
-embedding_size:20, learning_rate:0.005, train_batch_size:512, wav_mlp_sizes:[512,256,64,32]
+afeat_layer:9, embedding_size:32, learning_rate:0.01
 Valid result:
-auc : 0.8025    logloss : 0.4595
+auc : 0.6402    logloss : 0.4256    ndcg : 0.4517
 Test result:
-auc : 0.8028    logloss : 0.4593
+auc : 0.6396    logloss : 0.4266    ndcg : 0.4517
 
-embedding_size:40, learning_rate:0.0005, train_batch_size:1024, wav_mlp_sizes:[512,128,32]
+afeat_layer:8, embedding_size:64, learning_rate:0.05
 Valid result:
-auc : 0.8122    logloss : 0.4479
+auc : 0.621    logloss : 0.4335    ndcg : 0.4666
 Test result:
-auc : 0.8114    logloss : 0.4488
+auc : 0.6192    logloss : 0.4348    ndcg : 0.4666
 
-embedding_size:96, learning_rate:0.01, train_batch_size:1024, wav_mlp_sizes:[512,32]
+afeat_layer:7, embedding_size:64, learning_rate:0.01
 Valid result:
-auc : 0.6182    logloss : 0.5438
+auc : 0.6402    logloss : 0.4256    ndcg : 0.4517
 Test result:
-auc : 0.6153    logloss : 0.545
+auc : 0.6396    logloss : 0.4266    ndcg : 0.4517
 
-embedding_size:10, learning_rate:0.001, train_batch_size:512, wav_mlp_sizes:[512,32]
+afeat_layer:4, embedding_size:64, learning_rate:0.05
 Valid result:
-auc : 0.8002    logloss : 0.4467
+auc : 0.621    logloss : 0.4335    ndcg : 0.4666
 Test result:
-auc : 0.8    logloss : 0.4468
+auc : 0.6192    logloss : 0.4348    ndcg : 0.4666
 
-embedding_size:40, learning_rate:0.001, train_batch_size:1024, wav_mlp_sizes:[512,256,64,32]
+afeat_layer:8, embedding_size:16, learning_rate:0.1
 Valid result:
-auc : 0.8112    logloss : 0.4434
+auc : 0.6062    logloss : 0.4445    ndcg : 0.6178
 Test result:
-auc : 0.8113    logloss : 0.4432
+auc : 0.6043    logloss : 0.4459    ndcg : 0.6178
 
-embedding_size:64, learning_rate:0.005, train_batch_size:1024, wav_mlp_sizes:[512,32]
+afeat_layer:11, embedding_size:32, learning_rate:0.01
 Valid result:
-auc : 0.8064    logloss : 0.4525
+auc : 0.6402    logloss : 0.4256    ndcg : 0.4517
 Test result:
-auc : 0.8059    logloss : 0.453
+auc : 0.6396    logloss : 0.4266    ndcg : 0.4517
 
-embedding_size:128, learning_rate:0.0001, train_batch_size:512, wav_mlp_sizes:[512,128,32]
+afeat_layer:9, embedding_size:16, learning_rate:0.05
 Valid result:
-auc : 0.8062    logloss : 0.4461
+auc : 0.621    logloss : 0.4335    ndcg : 0.5518
 Test result:
-auc : 0.8059    logloss : 0.4466
+auc : 0.6192    logloss : 0.4348    ndcg : 0.5518
+
+afeat_layer:7, embedding_size:32, learning_rate:0.05
+Valid result:
+auc : 0.621    logloss : 0.4335    ndcg : 0.542
+Test result:
+auc : 0.6192    logloss : 0.4348    ndcg : 0.542
+
+afeat_layer:8, embedding_size:16, learning_rate:0.05
+Valid result:
+auc : 0.621    logloss : 0.4335    ndcg : 0.5518
+Test result:
+auc : 0.6192    logloss : 0.4348    ndcg : 0.5518
 

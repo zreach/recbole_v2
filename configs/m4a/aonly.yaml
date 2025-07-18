@@ -15,7 +15,7 @@ threshold:
 #指定从什么文件里读什么列，这里就是从ml-1m.inter里面读取user_id, item_id, rating, timestamp这四列,剩下的以此类推
 load_col:
     inter: [user_id, tracks_id, num_repeat]
-    user: [user_id]
+    # user: [user_id]
     item: [tracks_id]
 
 user_inter_num_interval: [5,1000000]
@@ -36,8 +36,8 @@ use_cb: true
 afeat_layer: 11
 no_itemid: true
 # a_feature_path: "dataset/m4a-fil/m4a-muq-last.pkl"
-a_feature_path: "dataset/m4a-fil/muq-alllayers-mean-m4afil.pkl"
-map_path: "dataset/m4a-fil/id2msd.pkl"
+a_feature_path: "dataset/m4a/m4a-muq.pkl"
+# map_path: "dataset/m4a-fil/id2msd.pkl"
 wav_mlp_sizes: [512, 32]
 
 neg_my: true
