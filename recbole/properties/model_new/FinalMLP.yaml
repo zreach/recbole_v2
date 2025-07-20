@@ -1,0 +1,9 @@
+embedding_size: 16          # (int) The embedding size of features.
+mlp1_hidden_size: [64, 32] # (list of int) The hidden size of deep network.
+mlp2_hidden_size: [64, 64, 64]
+reg_emb: 1e-6          # (int) The L2 regularization weight.
+dropout_prob: 0           # (float) The dropout rate.
+mlp1_dropout: 0.2      # (float) The dropout rate of the first MLP.
+mlp2_dropout: 0.2      # (float) The dropout rate of the
+use_fs: True          # (bool) Whether to use feature selection.
+fs_hidden_units: [64, 64]        # (list of str) The context features for the first

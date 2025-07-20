@@ -25,6 +25,7 @@ import torch
 import torch.nn.utils.rnn as rnn_utils
 from scipy.sparse import coo_matrix
 from recbole.data.interaction import Interaction
+from recbole.data.interaction import cat_interactions
 from recbole.utils import (
     FeatureSource,
     FeatureType,
@@ -188,7 +189,8 @@ class Dataset(torch.utils.data.Dataset):
         self._filter_inter_by_user_or_item()
         self._filter_by_inter_num()
         self._reset_index() # 这一步应该没什么作用
-
+    
+    
     def _build_feat_name_list(self):
         """Feat list building.
 
@@ -1636,6 +1638,47 @@ class Dataset(torch.utils.data.Dataset):
         split_ids = np.cumsum(cnt)[:-1]
         return list(split_ids)
 
+    def split_cold_start(self, cold_item_ratio, ratios, group_by=None):
+        
+
+        unique_item_ids = torch.unique(self.inter_feat[self.iid_field])
+        num_items = len(unique_item_ids)
+        num_cold_items = int(num_items * cold_item_ratio)
+        shuffled_item_ids = unique_item_ids[torch.randperm(num_items)]
+        cold_item_ids = shuffled_item_ids[:num_cold_items]
+
+        cold_item_set = set(cold_item_ids.numpy())
+        is_cold_mask = torch.tensor([x in cold_item_set for x in self.inter_feat[self.iid_field].numpy()], dtype=torch.bool)
+
+        cold_inter_feat = self.inter_feat[is_cold_mask]
+        warm_inter_feat = self.inter_feat[~is_cold_mask]
+
+        # Split cold item interactions into validation and test sets (50/50)
+        num_cold_inters = len(cold_inter_feat)
+        cold_inter_feat.shuffle()
+        cold_valid_inter = cold_inter_feat[:num_cold_inters // 2]
+        cold_test_inter = cold_inter_feat[num_cold_inters // 2:]
+
+        # Split warm item interactions
+        warm_dataset = self.copy(warm_inter_feat)
+        if group_by is None or group_by.lower() == "none":
+            warm_datasets = warm_dataset.split_by_ratio(ratios, group_by=None)
+        elif group_by == "user":
+            warm_datasets = warm_dataset.split_by_ratio(ratios, group_by=self.uid_field)
+        else:
+            raise NotImplementedError(f"The grouping method [{group_by}] has not been implemented.")
+
+        train_dataset, valid_dataset, test_dataset = warm_datasets
+
+        # Combine warm and cold splits
+        # valid_dataset.inter_feat.update(cold_valid_inter)
+        # test_dataset.inter_feat.update(cold_test_inter)
+        valid_dataset.inter_feat = cat_interactions([valid_dataset.inter_feat, cold_valid_inter])
+        test_dataset.inter_feat = cat_interactions([test_dataset.inter_feat, cold_test_inter])
+
+        datasets = [train_dataset, valid_dataset, test_dataset]
+        return datasets
+
     def split_by_ratio(self, ratios, group_by=None):
         """Split interaction records by ratios.
 
@@ -1814,6 +1857,12 @@ class Dataset(torch.utils.data.Dataset):
         elif split_mode == "LS":
             datasets = self.leave_one_out(
                 group_by=self.uid_field, leave_one_mode=split_args["LS"]
+            )
+        elif split_mode == "cold_item":
+            datasets = self.split_cold_start(
+                cold_item_ratio=self.config["eval_args"]["cold_item_ratio"],
+                ratios=split_args["cold_item"],
+                group_by=group_by,
             )
         else:
             raise NotImplementedError(

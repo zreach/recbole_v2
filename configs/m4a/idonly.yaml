@@ -29,12 +29,18 @@ learning_rate: 0.005 #学习率
 # training_neg_sample_num: 0 #负采样数目
 eval_step: 1 #每次训练后做evalaution的次数
 stopping_step: 10 #控制训练收敛的步骤数，在该步骤数内若选取的评测标准没有什么变化，就可以提前停止了
-embedding_size: 10
+# embedding_size: 10
 
 neg_my: true
 train_neg_sample_args:
     distribution: "uniform"
     sample_num: 1
+# valid_neg_sample_args:
+#     distribution: "uniform"
+#     sample_num: 1
+# test_neg_sample_args:
+#     distribution: "uniform"
+#     sample_num: 1
 eval_args:
     mode:
         valid: my_uni

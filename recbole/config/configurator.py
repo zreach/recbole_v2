@@ -239,7 +239,7 @@ class Config(object):
         current_path = os.path.dirname(os.path.realpath(__file__))
         overall_init_file = os.path.join(current_path, "../properties/overall.yaml")
         model_init_file = os.path.join(
-            current_path, "../properties/model/" + model + ".yaml"
+            current_path, "../properties/model_new/" + model + ".yaml"
         )
         sample_init_file = os.path.join(
             current_path, "../properties/dataset/sample.yaml"
@@ -554,7 +554,7 @@ class Config(object):
         elif eval_mode == "my_pop":
             eval_neg_sample_args = {"distribution": "popularity", "sample_num": 1}
         elif eval_mode == "my_uni":
-            eval_neg_sample_args = {"distribution": "popularity", "sample_num": 1}
+            eval_neg_sample_args = {"distribution": "uniform", "sample_num": 1}
         elif eval_mode == "full":
             eval_neg_sample_args = {"distribution": "uniform", "sample_num": "none"}
         elif eval_mode[0:3] == "uni":

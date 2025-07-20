@@ -135,52 +135,95 @@ class GeneralRecommender_my(AbstractRecommender):
         self.id2token = {}
         self.use_cb = config['use_cb']
 
+        self.use_audio = config['use_audio']
+        self.use_text = config['use_text']
+
         if self.use_cb:
-            map_path = config['map_path']
-            with open(map_path, 'rb') as fp:
-                self.id2msd = pickle.load(fp)
+            
             self.id2msd = {str(k): v for k, v in self.id2msd.items()}
             self.id2msd['[PAD]'] = '[PAD]'
 
-            a_feature_path = config['a_feature_path']
-            with open(a_feature_path, 'rb') as fp:
-                music_features_array = pickle.load(fp)
+            if self.use_audio:
+                a_feature_path = config['a_feature_path']
+                with open(a_feature_path, 'rb') as fp:
+                    music_features_array = pickle.load(fp)
+                
+                self.wav_embedding_size = list(music_features_array.values())[0].shape[-1]
+                music_features_array['[PAD]'] = np.zeros((self.wav_embedding_size))
+                music_features = torch.zeros((len(self.token2id['tracks_id']), self.wav_embedding_size ))
+
+            if self.use_text:
+                t_feature_path = config['t_feature_path']
+                with open(t_feature_path, 'rb') as fp:
+                    text_features_array = pickle.load(fp)
+
+                self.text_embedding_size = list(text_features_array.values())[0].shape[-1]
+                text_features_array['[PAD]'] = np.zeros((self.text_embedding_size))
+                text_features = torch.zeros((len(self.token2id['tracks_id']), self.text_embedding_size ))
             
-            self.wav_embedding_size = list(music_features_array.values())[0].shape[-1]
-            music_features_array['[PAD]'] = np.zeros((self.wav_embedding_size))
             
-            music_features = torch.zeros((len(self.token2id['tracks_id']), self.wav_embedding_size ))
             if config['dataset'] in ['lfm1b-fil', 'm4a-fil']:
+                map_path = config['map_path']
+                with open(map_path, 'rb') as fp:
+                    self.id2msd = pickle.load(fp)
                 for k, v in self.token2id['tracks_id'].items():
                     # if config['dataset'] == 'm4a-fil':
                     #     k = str(k)
                     k = self.id2msd[k]
                     self.id2token[v] = k
                     if k == '[PAD]':
-                        feature = np.zeros((self.wav_embedding_size))
+                        if self.use_audio:
+                            wav_feature = np.zeros((self.wav_embedding_size))
+                        if self.use_text:
+                            text_feature = np.zeros((self.text_embedding_size))
                     else:
-                        layer = config['afeat_layer']
-                        if layer is not None:
-                            feature = music_features_array[k][layer]
-                        else:
-                            feature = music_features_array[k]
+                        if self.use_text:
+                            text_feature = text_features_array[k]
+                        if self.use_audio:
+                            layer = config['afeat_layer']
+                            
+                            if layer is not None:
+                                wav_feature = music_features_array[k][layer]
+                            else:
+                                wav_feature = music_features_array[k]
                     # print('layer', layer)
-                    music_features[v] = torch.Tensor(feature)
+                    if self.use_audio:
+                        music_features[v] = torch.Tensor(wav_feature)
+                    if self.use_text:
+                        text_features[v] = torch.Tensor(text_feature)
             elif config['dataset'] == 'm4a': # 这个数据没有时间维度， 而且不需要map
                 for k, v in self.token2id['tracks_id'].items():
                     self.id2token[v] = k
                     if k == '[PAD]':
-                        feature = np.zeros((self.wav_embedding_size))
+                        if self.use_audio:
+                            wav_feature = np.zeros((self.wav_embedding_size))
+                        if self.use_text:
+                            text_feature = np.zeros((self.text_embedding_size))
                     else:
-                        layer = config['afeat_layer']
-                        if layer is not None:
-                            feature = music_features_array[k][layer]
-                        else:
-                            feature = music_features_array[k]
+                        if self.use_text:
+                            text_feature = text_features_array[k]
+                        if self.use_audio:
+                            layer = config['afeat_layer']
+                            
+                            if layer is not None:
+                                wav_feature = music_features_array[k][layer]
+                            else:
+                                wav_feature = music_features_array[k]
+                    # print('layer', layer)
+                    if self.use_audio:
+                        music_features[v] = torch.Tensor(wav_feature)
+                    if self.use_text:
+                        text_features[v] = torch.Tensor(text_feature)
             # music_features = torch.load('/user/zhouyz/rec/myRec/wav2feature.pt')
-            self.a_feats = music_features
-            self.id2feature = nn.Embedding.from_pretrained(music_features)
-            self.id2feature.requires_grad_(False)
+            if self.use_audio:
+                self.a_feats = music_features
+                self.id2afeats = nn.Embedding.from_pretrained(music_features)
+                self.id2afeats.requires_grad_(False)
+
+            if self.use_text:
+                self.t_feats = text_features
+                self.id2tfeats = nn.Embedding.from_pretrained(text_features)
+                self.id2tfeats.requires_grad_(False)
 
 class AutoEncoderMixin(object):
     """This is a common part of auto-encoders. All the auto-encoder models should inherit this class,
@@ -351,16 +394,32 @@ class ContextRecommender(AbstractRecommender):
         if self.use_cb is None:
             self.use_cb = False
 
-        if self.use_cb:
+        self.use_audio = config['use_audio']
+        self.use_text = config['use_text']
 
-            a_feature_path = config['a_feature_path']
-            with open(a_feature_path, 'rb') as fp:
-                music_features_array = pickle.load(fp)
+        if self.use_cb:
             
-            self.wav_embedding_size = list(music_features_array.values())[0].shape[-1]
-            music_features_array['[PAD]'] = np.zeros((self.wav_embedding_size))
             
-            music_features = torch.zeros((len(self.token2id['tracks_id']), self.wav_embedding_size ))
+
+            if self.use_audio:
+                a_feature_path = config['a_feature_path']
+                with open(a_feature_path, 'rb') as fp:
+                    music_features_array = pickle.load(fp)
+                
+                self.wav_embedding_size = list(music_features_array.values())[0].shape[-1]
+                music_features_array['[PAD]'] = np.zeros((self.wav_embedding_size))
+                music_features = torch.zeros((len(self.token2id['tracks_id']), self.wav_embedding_size ))
+
+            if self.use_text:
+                t_feature_path = config['t_feature_path']
+                with open(t_feature_path, 'rb') as fp:
+                    text_features_array = pickle.load(fp)
+
+                self.text_embedding_size = list(text_features_array.values())[0].shape[-1]
+                text_features_array['[PAD]'] = np.zeros((self.text_embedding_size))
+                text_features = torch.zeros((len(self.token2id['tracks_id']), self.text_embedding_size ))
+            
+            
             if config['dataset'] in ['lfm1b-fil', 'm4a-fil']:
                 map_path = config['map_path']
                 with open(map_path, 'rb') as fp:
@@ -368,33 +427,63 @@ class ContextRecommender(AbstractRecommender):
                 self.id2msd = {str(k): v for k, v in self.id2msd.items()}
                 self.id2msd['[PAD]'] = '[PAD]'
                 for k, v in self.token2id['tracks_id'].items():
+                    # if config['dataset'] == 'm4a-fil':
+                    #     k = str(k)
                     k = self.id2msd[k]
                     self.id2token[v] = k
                     if k == '[PAD]':
-                        feature = np.zeros((self.wav_embedding_size))
+                        if self.use_audio:
+                            wav_feature = np.zeros((self.wav_embedding_size))
+                        if self.use_text:
+                            text_feature = np.zeros((self.text_embedding_size))
                     else:
-                        layer = config['afeat_layer']
-                        if layer is not None:
-                            feature = music_features_array[k][layer]
-                        else:
-                            feature = music_features_array[k]
+                        if self.use_text:
+                            text_feature = text_features_array[k]
+                        if self.use_audio:
+                            layer = config['afeat_layer']
+                            
+                            if layer is not None:
+                                wav_feature = music_features_array[k][layer]
+                            else:
+                                wav_feature = music_features_array[k]
                     # print('layer', layer)
-                    music_features[v] = torch.Tensor(feature)
-            elif config['dataset'] == 'm4a':
+                    if self.use_audio:
+                        music_features[v] = torch.Tensor(wav_feature)
+                    if self.use_text:
+                        text_features[v] = torch.Tensor(text_feature)
+            elif config['dataset'] == 'm4a': # 这个数据没有时间维度， 而且不需要map
                 for k, v in self.token2id['tracks_id'].items():
                     self.id2token[v] = k
                     if k == '[PAD]':
-                        feature = np.zeros((self.wav_embedding_size))
+                        if self.use_audio:
+                            wav_feature = np.zeros((self.wav_embedding_size))
+                        if self.use_text:
+                            text_feature = np.zeros((self.text_embedding_size))
                     else:
-                        layer = config['afeat_layer']
-                        if layer is not None:
-                            feature = music_features_array[k][layer]
-                        else:
-                            feature = music_features_array[k]
+                        if self.use_text:
+                            text_feature = text_features_array[k]
+                        if self.use_audio:
+                            layer = config['afeat_layer']
+                            
+                            if layer is not None:
+                                wav_feature = music_features_array[k][layer]
+                            else:
+                                wav_feature = music_features_array[k]
+                    # print('layer', layer)
+                    if self.use_audio:
+                        music_features[v] = torch.Tensor(wav_feature)
+                    if self.use_text:
+                        text_features[v] = torch.Tensor(text_feature)
             # music_features = torch.load('/user/zhouyz/rec/myRec/wav2feature.pt')
-            self.a_feats = music_features
-            self.id2feature = nn.Embedding.from_pretrained(music_features)
-            self.id2feature.requires_grad_(False)
+            if self.use_audio:
+                self.a_feats = music_features
+                self.id2afeats = nn.Embedding.from_pretrained(music_features)
+                self.id2afeats.requires_grad_(False)
+
+            if self.use_text:
+                self.t_feats = text_features
+                self.id2tfeats = nn.Embedding.from_pretrained(text_features)
+                self.id2tfeats.requires_grad_(False)
         
         if self.double_tower:
             self.user_field_names = dataset.fields(
@@ -480,12 +569,19 @@ class ContextRecommender(AbstractRecommender):
         self.first_order_linear = FMFirstOrderLinear(config, dataset)
         
         
-        if self.use_cb:
+        if self.use_audio:
             size_list = [
                 self.wav_embedding_size 
             ] + config['wav_mlp_sizes'] + [self.embedding_size]
             self.wav_mlp = MLPLayers(size_list, 0.2)
             # self.wav_fc = nn.Linear(1024, self.embedding_size)
+            self.num_feature_field += 1
+        if self.use_text:
+            size_list = [
+                self.text_embedding_size 
+            ] + config['text_mlp_sizes'] + [self.embedding_size]
+            self.text_mlp = MLPLayers(size_list, 0.2)
+            # self.text_fc = nn.Linear(1024, self.embedding_size)
             self.num_feature_field += 1
     
     def get_music_features(self, track_ids):
@@ -715,18 +811,30 @@ class ContextRecommender(AbstractRecommender):
 
     def get_wav_embedding(self, interaction):
         track_ids = interaction['tracks_id']
-        wav_features = self.id2feature(track_ids)
+        wav_features = self.id2afeats(track_ids)
         # print(wav_features[0])
         embed_features = self.wav_mlp(wav_features)
 
         return embed_features.unsqueeze(1)
+
+    def get_text_embedding(self, interaction):
+        track_ids = interaction['tracks_id']
+        text_features = self.id2tfeats(track_ids)
+        # print(text_features[0])
+        embed_features = self.text_mlp(text_features)
+
+        return embed_features.unsqueeze(1)
+    
     def concat_embed_input_fields(self, interaction):
         
         sparse_embedding, dense_embedding = self.embed_input_fields(interaction)
         all_embeddings = []
-        if self.use_cb:
+        if self.use_audio:
             wav_embedding = self.get_wav_embedding(interaction) 
             all_embeddings.append(wav_embedding)
+        if self.use_text:
+            text_embedding = self.get_text_embedding(interaction)
+            all_embeddings.append(text_embedding)
         if sparse_embedding is not None:
             all_embeddings.append(sparse_embedding)
         if dense_embedding is not None and len(dense_embedding.shape) == 3:

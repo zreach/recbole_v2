@@ -1,0 +1,7 @@
+embedding_size: 40                # (int) The embedding size of features.
+mlp_hidden_size: [64, 32]  # (list of int) The hidden size of MLP layers.  
+dropout_prob: 0.2                 # (float) The dropout rate.
+model_type: SerialMaskNet          # (str) The type of the model.
+reduction_ratio: 1
+parallel_num_blocks: 1
+parallel_block_dim: 64

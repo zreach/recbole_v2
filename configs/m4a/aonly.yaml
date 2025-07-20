@@ -29,13 +29,14 @@ learning_rate: 0.005 #学习率
 # training_neg_sample_num: 0 #负采样数目
 eval_step: 1 #每次训练后做evalaution的次数
 stopping_step: 10 #控制训练收敛的步骤数，在该步骤数内若选取的评测标准没有什么变化，就可以提前停止了
-embedding_size: 10
+# embedding_size: 10
 
 # audio相关
 use_cb: true
+use_audio: true
 afeat_layer: 11
 no_itemid: true
-# a_feature_path: "dataset/m4a-fil/m4a-muq-last.pkl"
+
 a_feature_path: "dataset/m4a/m4a-muq.pkl"
 # map_path: "dataset/m4a-fil/id2msd.pkl"
 wav_mlp_sizes: [512, 32]

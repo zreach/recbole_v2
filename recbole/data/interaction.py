@@ -279,6 +279,9 @@ class Interaction(object):
         for k in new_inter.interaction:
             self.interaction[k] = new_inter.interaction[k]
 
+    def append(self, other):
+        pass
+    
     def drop(self, column):
         """Drop column in interaction.
 

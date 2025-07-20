@@ -1,2 +1,15 @@
-user_inter_num_interval: [5,100]
-item_inter_num_interval: [5,100] 
+# user_inter_num_interval: [5,100]
+# item_inter_num_interval: [5,100]
+eval_args:
+  mode:
+    valid: my_uni
+    test: my_uni
+  split: {'cold_item':[0.8,0.1,0.1]}
+  cold_item_ratio: 0.2
+    # LS: True
+  group_by: user
+  order: RO
+metrics: ['AUC', 'LogLoss', 'NDCG_CTR']
+valid_metric: AUC
+topk: 10
+# train_neg_sample_args: ~

@@ -18,7 +18,7 @@ import numpy as np
 from torch.nn.init import xavier_normal_, constant_
 
 from recbole.model.abstract_recommender_my import ContextRecommender
-from recbole.model.layers import MLPLayers
+from recbole.model.layers import MLPLayers, BaseFactorizationMachine
 
 
 class WuKong(ContextRecommender):
@@ -102,26 +102,26 @@ class WuKong(ContextRecommender):
         return self.sigmoid(self.forward(interaction))
 
 
-class FactorizationMachineBlock(nn.Module):
-    def __init__(self, num_features=14, embedding_dim=16, project_dim=8):
-        super(FactorizationMachineBlock, self).__init__()
-        self.embedding_dim = embedding_dim
-        self.project_dim = project_dim
-        self.num_features = num_features
-        self.projection_matrix = nn.Parameter(torch.randn(self.num_features, self.project_dim))
+# class FactorizationMachineBlock(nn.Module):
+#     def __init__(self, num_features=14, embedding_dim=16, project_dim=8):
+#         super(FactorizationMachineBlock, self).__init__()
+#         self.embedding_dim = embedding_dim
+#         self.project_dim = project_dim
+#         self.num_features = num_features
+#         self.projection_matrix = nn.Parameter(torch.randn(self.num_features, self.project_dim))
     
-    def forward(self, x):
-        batch_size = x.size(0)
-        x_fm = x.view(batch_size, self.num_features, self.embedding_dim)
-        projected = torch.matmul(x_fm.transpose(1, 2), self.projection_matrix)
-        fm_matrix = torch.matmul(x_fm, projected)
-        return fm_matrix.view(batch_size, -1)
+#     def forward(self, x):
+#         batch_size = x.size(0)
+#         x_fm = x.view(batch_size, self.num_features, self.embedding_dim)
+#         projected = torch.matmul(x_fm.transpose(1, 2), self.projection_matrix)
+#         fm_matrix = torch.matmul(x_fm, projected)
+#         return fm_matrix.view(batch_size, -1)
 
 
 class FMB(nn.Module):
     def __init__(self, num_features=14, embedding_dim=16, fmb_units=[32,32], fmb_dim=40, project_dim=8):
         super(FMB, self).__init__()
-        self.fm_block = FactorizationMachineBlock(num_features, embedding_dim, project_dim)
+        self.fm_block = BaseFactorizationMachine(num_features, embedding_dim, project_dim)
         self.layer_norm = nn.LayerNorm(num_features * project_dim)
         model_layers = [nn.Linear(num_features * project_dim, fmb_units[0]), nn.ReLU()]
         for i in range(1, len(fmb_units)):

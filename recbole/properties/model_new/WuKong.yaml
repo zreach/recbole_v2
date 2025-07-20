@@ -1,0 +1,8 @@
+embedding_size: 64               # (int) The embedding size of features.
+fmb_units: [128,128,128]  # (list of int) The hidden size of MLP layers.  
+dropout_prob: 0.2                 # (float) The dropout rate.
+mlp_hidden_sizes: [64]
+num_layers: 4
+project_dim: 24
+fmb_dim: 32
+compression_dim: 32
