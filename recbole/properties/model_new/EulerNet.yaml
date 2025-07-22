@@ -1,4 +1,4 @@
-embedding_size: 16              # (int) The embedding size of features.
+embedding_size: 40              # (int) The embedding size of features.
 order_list: [30]                # (list) The order vectors of EulerNet
 drop_ex: 0.3                    # (float) The dropout rate for the modulus and phase
 drop_im: 0.3                    # (float) The dropout rate for the real and imaginary part 

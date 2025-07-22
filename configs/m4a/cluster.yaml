@@ -1,0 +1,5 @@
+external_features:
+  item_feat: # 目标特征表 (可以是 'item_feat', 'user_feat', 'inter_feat')
+    filepath: dataset/m4a/kmeans/m4a-muq-all-layers-clusters-32.item # 外部特征文件路径
+    on_col: tracks_id # 用于合并的列名
+    external_feats: [layer_0, layer_1, layer_2, layer_3, layer_4, layer_5, layer_6, layer_7, layer_8, layer_9, layer_10, layer_11] # 外部特征列名列表

@@ -25,7 +25,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-from recbole.model.abstract_recommender import GeneralRecommender
+from recbole.model.abstract_recommender_my import GeneralRecommender
 from recbole.model.init import xavier_normal_initialization
 from recbole.model.layers import BiGNNLayer, SparseDropout
 from recbole.model.loss import BPRLoss, EmbLoss

@@ -13,7 +13,7 @@ import scipy.sparse as sp
 import torch
 import torch.nn.functional as F
 
-from recbole.model.abstract_recommender import GeneralRecommender
+from recbole.model.abstract_recommender_my import GeneralRecommender
 from recbole.model.init import xavier_uniform_initialization
 from recbole.model.loss import BPRLoss, EmbLoss
 from recbole.utils import InputType

@@ -8,10 +8,10 @@ import torch.nn.functional as F
 
 
 from recbole.model.utils.utils import build_sim, compute_normalized_laplacian, build_knn_neighbourhood
-from recbole.model.abstract_recommender_my import GeneralRecommender_my
+from recbole.model.abstract_recommender_my import GeneralRecommender
 from recbole.utils import InputType
 
-class FREEDOM(GeneralRecommender_my):
+class FREEDOM(GeneralRecommender):
 
     input_type = InputType.PAIRWISE
 

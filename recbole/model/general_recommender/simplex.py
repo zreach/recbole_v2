@@ -18,7 +18,7 @@ from torch import nn
 import torch.nn.functional as F
 
 from recbole.model.init import xavier_normal_initialization
-from recbole.model.abstract_recommender import GeneralRecommender
+from recbole.model.abstract_recommender_my import GeneralRecommender
 from recbole.model.loss import EmbLoss
 from recbole.utils import InputType
 

@@ -117,6 +117,7 @@ class Dataset(torch.utils.data.Dataset):
         self._get_preset()
         self._get_field_from_config()
         self._load_data(self.dataset_name, self.dataset_path)
+        self._merge_external_feat()
         self._init_alias()
         self._data_processing()
 
@@ -162,6 +163,7 @@ class Dataset(torch.utils.data.Dataset):
         if self.benchmark_filename_list is None:
             self._data_filtering() 
         # 先filter再remap
+        
         self._remap_ID_all()
         self._user_item_feat_preparation()
         self._fill_nan()
@@ -190,7 +192,7 @@ class Dataset(torch.utils.data.Dataset):
         self._filter_by_inter_num()
         self._reset_index() # 这一步应该没什么作用
     
-    
+
     def _build_feat_name_list(self):
         """Feat list building.
 
@@ -2224,3 +2226,55 @@ class Dataset(torch.utils.data.Dataset):
                     ]
                     new_data[k] = rnn_utils.pad_sequence(seq_data, batch_first=True)
         return Interaction(new_data)
+    
+    def _merge_external_feat(self):
+        """Load and merge external features from files specified in config."""
+        if not self.config["external_features"]:
+            return
+    
+        self.logger.debug(
+            set_color("Merging external features.", "green")
+            + f" Config: {self.config['external_features']}"
+        )
+
+        for target_feat_name, merge_info in self.config["external_features"].items():
+            if not hasattr(self, target_feat_name):
+                self.logger.warning(
+                    f"Target feature '{target_feat_name}' not found, skipping merge."
+                )
+                continue
+
+            target_feat = getattr(self, target_feat_name) # user/item
+            filepath = merge_info.get("filepath")
+            on_field = merge_info.get("on_col")
+
+            if not filepath or not on_field:
+                raise ValueError(
+                    f"Config for external_feature '{target_feat_name}' must contain 'filepath' and 'on' keys."
+                )
+
+            if on_field not in target_feat.columns:
+                raise ValueError(
+                    f"Merge key '{on_field}' not found in target feature '{target_feat_name}'."
+                )
+
+            source = FeatureSource.ITEM if target_feat_name == "item_feat" else FeatureSource.USER
+            self.config["load_col"][source.value] += merge_info.get("external_feats")
+            external_feat_df = self._load_feat(filepath, source)
+            if on_field not in external_feat_df.columns:
+                raise ValueError(
+                    f"Merge key '{on_field}' not found in external feature file '{filepath}'."
+                )
+
+            external_feat_df.drop_duplicates(subset=[on_field], keep="first", inplace=True)
+
+            original_columns = set(target_feat.columns)
+            merged_feat = pd.merge(
+                target_feat, external_feat_df, on=on_field, how="left"
+            )
+            new_columns = set(merged_feat.columns) - original_columns
+            self.logger.info(
+                f"Merged {len(new_columns)} new columns into '{target_feat_name}': {list(new_columns)}"
+            )
+
+            setattr(self, target_feat_name, merged_feat)

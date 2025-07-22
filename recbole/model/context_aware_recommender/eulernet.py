@@ -18,7 +18,7 @@ Reference code:
 import torch
 import torch.nn as nn
 from torch.nn.init import xavier_normal_, constant_
-from recbole.model.abstract_recommender import ContextRecommender
+from recbole.model.abstract_recommender_my import ContextRecommender
 from recbole.model.loss import RegLoss
 
 
@@ -48,14 +48,17 @@ class EulerNet(ContextRecommender):
         self.sigmoid = nn.Sigmoid()
         self.reg_loss = RegLoss()
         self.loss = nn.BCEWithLogitsLoss()
-        self.apply(self._init_other_weights)
-
-    def _init_other_weights(self, module):
-        if isinstance(module, nn.Embedding):
-            xavier_normal_(module.weight.data)
-        elif isinstance(module, nn.Linear):
-            if module.bias is not None:
-                constant_(module.bias.data, 0)
+        
+        for name, submodule in self.named_modules():
+            self._init_weights(name, submodule)
+    def _init_weights(self, name, module):
+        if name not in ['id2afeats', 'id2tfeats']:
+            if isinstance(module, nn.Embedding):
+                xavier_normal_(module.weight.data)
+            elif isinstance(module, nn.Linear):
+                xavier_normal_(module.weight.data)
+                if module.bias is not None:
+                    constant_(module.bias.data, 0)
 
     def forward(self, interaction):
         fm_all_embeddings = self.concat_embed_input_fields(

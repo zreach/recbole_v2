@@ -119,9 +119,9 @@ class WuKong(ContextRecommender):
 
 
 class FMB(nn.Module):
-    def __init__(self, num_features=14, embedding_dim=16, fmb_units=[32,32], fmb_dim=40, project_dim=8):
+    def __init__(self, num_features=14, fmb_units=[32,32], fmb_dim=40, project_dim=8):
         super(FMB, self).__init__()
-        self.fm_block = BaseFactorizationMachine(num_features, embedding_dim, project_dim)
+        self.fm_block = BaseFactorizationMachine(reduce_sum=True)
         self.layer_norm = nn.LayerNorm(num_features * project_dim)
         model_layers = [nn.Linear(num_features * project_dim, fmb_units[0]), nn.ReLU()]
         for i in range(1, len(fmb_units)):

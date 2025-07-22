@@ -17,7 +17,7 @@ import torch
 import torch.nn as nn
 import copy
 
-from recbole.model.abstract_recommender import GeneralRecommender
+from recbole.model.abstract_recommender_my import GeneralRecommender
 from recbole.model.layers import MLPLayers, CNNLayers
 from recbole.model.general_recommender.bpr import BPR
 from recbole.utils import InputType

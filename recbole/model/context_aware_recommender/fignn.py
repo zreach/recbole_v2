@@ -23,7 +23,7 @@ from torch.nn.init import xavier_uniform_, xavier_normal_, constant_
 from itertools import product
 
 from recbole.utils import InputType
-from recbole.model.abstract_recommender import ContextRecommender
+from recbole.model.abstract_recommender_my import ContextRecommender
 
 
 class GraphLayer(nn.Module):
@@ -102,7 +102,20 @@ class FiGNN(ContextRecommender):
         self.sigmoid = nn.Sigmoid()
         self.loss = nn.BCEWithLogitsLoss()
         # parameters initialization
-        self.apply(self._init_weights)
+        for name, submodule in self.named_modules():
+            self._init_weights(name, submodule)
+    
+    def _init_weights(self, name, module):
+        if name not in ['id2afeats', 'id2tfeats']:
+            if isinstance(module, nn.Embedding):
+                xavier_normal_(module.weight.data)
+            elif isinstance(module, nn.Linear):
+                xavier_normal_(module.weight.data)
+                if module.bias is not None:
+                    constant_(module.bias.data, 0)
+            elif isinstance(module, nn.GRU):
+                xavier_uniform_(module.weight_hh_l0)
+                xavier_uniform_(module.weight_ih_l0)
 
     def fignn_layer(self, in_feature):
         emb_feature = self.att_embedding(in_feature)
@@ -143,16 +156,16 @@ class FiGNN(ContextRecommender):
         logit = (weight * score).sum(dim=1).unsqueeze(-1)
         return logit
 
-    def _init_weights(self, module):
-        if isinstance(module, nn.Embedding):
-            xavier_normal_(module.weight.data)
-        elif isinstance(module, nn.Linear):
-            xavier_normal_(module.weight.data)
-            if module.bias is not None:
-                constant_(module.bias.data, 0)
-        elif isinstance(module, nn.GRU):
-            xavier_uniform_(module.weight_hh_l0)
-            xavier_uniform_(module.weight_ih_l0)
+    # def _init_weights(self, module):
+    #     if isinstance(module, nn.Embedding):
+    #         xavier_normal_(module.weight.data)
+    #     elif isinstance(module, nn.Linear):
+    #         xavier_normal_(module.weight.data)
+    #         if module.bias is not None:
+    #             constant_(module.bias.data, 0)
+    #     elif isinstance(module, nn.GRU):
+    #         xavier_uniform_(module.weight_hh_l0)
+    #         xavier_uniform_(module.weight_ih_l0)
 
     def forward(self, interaction):
         fignn_all_embeddings = self.concat_embed_input_fields(

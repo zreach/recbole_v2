@@ -26,7 +26,7 @@ import scipy.sparse as sp
 import torch
 import torch.nn as nn
 
-from recbole.model.abstract_recommender import GeneralRecommender
+from recbole.model.abstract_recommender_my import GeneralRecommender
 from recbole.model.layers import SparseDropout
 from recbole.utils import InputType
 

@@ -22,7 +22,7 @@ import torch.nn.functional as F
 import torch.nn as nn
 from recbole.model.init import xavier_normal_initialization
 from recbole.utils.enum_type import InputType
-from recbole.model.abstract_recommender import AutoEncoderMixin, GeneralRecommender
+from recbole.model.abstract_recommender_my import AutoEncoderMixin, GeneralRecommender
 from recbole.model.layers import MLPLayers
 import typing
 

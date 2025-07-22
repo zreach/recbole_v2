@@ -1,72 +1,72 @@
-afeat_layer:0, embedding_size:32, learning_rate:0.1
+afeat_layer:8
 Valid result:
-auc : 0.6062    logloss : 0.4445    ndcg : 0.5869
+auc : 0.8075    logloss : 0.3534    ndcg : 1.0
 Test result:
-auc : 0.6043    logloss : 0.4459    ndcg : 0.5869
+auc : 0.8083    logloss : 0.3535    ndcg : 1.0
 
-afeat_layer:11, embedding_size:64, learning_rate:0.001
+afeat_layer:11
 Valid result:
-auc : 0.6425    logloss : 0.4247    ndcg : 0.2876
+auc : 0.8077    logloss : 0.3544    ndcg : 1.0
 Test result:
-auc : 0.6422    logloss : 0.4256    ndcg : 0.2876
+auc : 0.8096    logloss : 0.3536    ndcg : 1.0
 
-afeat_layer:8, embedding_size:32, learning_rate:0.01
+afeat_layer:9
 Valid result:
-auc : 0.6402    logloss : 0.4256    ndcg : 0.4517
+auc : 0.8065    logloss : 0.3543    ndcg : 1.0
 Test result:
-auc : 0.6396    logloss : 0.4266    ndcg : 0.4517
+auc : 0.8081    logloss : 0.3539    ndcg : 1.0
 
-afeat_layer:9, embedding_size:32, learning_rate:0.01
+afeat_layer:1
 Valid result:
-auc : 0.6402    logloss : 0.4256    ndcg : 0.4517
+auc : 0.8056    logloss : 0.3545    ndcg : 1.0
 Test result:
-auc : 0.6396    logloss : 0.4266    ndcg : 0.4517
+auc : 0.8066    logloss : 0.3547    ndcg : 1.0
 
-afeat_layer:8, embedding_size:64, learning_rate:0.05
+afeat_layer:7
 Valid result:
-auc : 0.621    logloss : 0.4335    ndcg : 0.4666
+auc : 0.806    logloss : 0.3542    ndcg : 1.0
 Test result:
-auc : 0.6192    logloss : 0.4348    ndcg : 0.4666
+auc : 0.8076    logloss : 0.354    ndcg : 1.0
 
-afeat_layer:7, embedding_size:64, learning_rate:0.01
+afeat_layer:5
 Valid result:
-auc : 0.6402    logloss : 0.4256    ndcg : 0.4517
+auc : 0.8085    logloss : 0.3528    ndcg : 1.0
 Test result:
-auc : 0.6396    logloss : 0.4266    ndcg : 0.4517
+auc : 0.8094    logloss : 0.3527    ndcg : 1.0
 
-afeat_layer:4, embedding_size:64, learning_rate:0.05
+afeat_layer:3
 Valid result:
-auc : 0.621    logloss : 0.4335    ndcg : 0.4666
+auc : 0.8051    logloss : 0.3547    ndcg : 1.0
 Test result:
-auc : 0.6192    logloss : 0.4348    ndcg : 0.4666
+auc : 0.8062    logloss : 0.3545    ndcg : 1.0
 
-afeat_layer:8, embedding_size:16, learning_rate:0.1
+afeat_layer:6
 Valid result:
-auc : 0.6062    logloss : 0.4445    ndcg : 0.6178
+auc : 0.8076    logloss : 0.3523    ndcg : 1.0
 Test result:
-auc : 0.6043    logloss : 0.4459    ndcg : 0.6178
+auc : 0.8081    logloss : 0.3529    ndcg : 1.0
 
-afeat_layer:11, embedding_size:32, learning_rate:0.01
+afeat_layer:4
 Valid result:
-auc : 0.6402    logloss : 0.4256    ndcg : 0.4517
+auc : 0.807    logloss : 0.3538    ndcg : 1.0
 Test result:
-auc : 0.6396    logloss : 0.4266    ndcg : 0.4517
+auc : 0.8087    logloss : 0.3532    ndcg : 1.0
 
-afeat_layer:9, embedding_size:16, learning_rate:0.05
+afeat_layer:2
 Valid result:
-auc : 0.621    logloss : 0.4335    ndcg : 0.5518
+auc : 0.8072    logloss : 0.3526    ndcg : 1.0
 Test result:
-auc : 0.6192    logloss : 0.4348    ndcg : 0.5518
+auc : 0.8077    logloss : 0.3532    ndcg : 1.0
 
-afeat_layer:7, embedding_size:32, learning_rate:0.05
+afeat_layer:10
 Valid result:
-auc : 0.621    logloss : 0.4335    ndcg : 0.542
+auc : 0.8064    logloss : 0.3537    ndcg : 1.0
 Test result:
-auc : 0.6192    logloss : 0.4348    ndcg : 0.542
+auc : 0.8072    logloss : 0.3542    ndcg : 1.0
 
-afeat_layer:8, embedding_size:16, learning_rate:0.05
+afeat_layer:0
 Valid result:
-auc : 0.621    logloss : 0.4335    ndcg : 0.5518
+auc : 0.8067    logloss : 0.3546    ndcg : 1.0
 Test result:
-auc : 0.6192    logloss : 0.4348    ndcg : 0.5518
+auc : 0.8081    logloss : 0.3545    ndcg : 1.0
 

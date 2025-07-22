@@ -16,7 +16,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 import numpy as np
 
-from recbole.model.abstract_recommender import AutoEncoderMixin, GeneralRecommender
+from recbole.model.abstract_recommender_my import AutoEncoderMixin, GeneralRecommender
 from recbole.model.init import xavier_normal_initialization
 from recbole.utils import InputType
 

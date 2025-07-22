@@ -7,10 +7,10 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 
-from recbole.model.abstract_recommender_my import GeneralRecommender_my
+from recbole.model.abstract_recommender_my import GeneralRecommender
 from recbole.utils import InputType
 
-class LGMRec(GeneralRecommender_my):
+class LGMRec(GeneralRecommender):
     input_type = InputType.PAIRWISE
     def __init__(self, config, dataset):
         self.t_feat = None

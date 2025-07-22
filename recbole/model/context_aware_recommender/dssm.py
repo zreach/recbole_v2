@@ -15,7 +15,7 @@ import torch
 import torch.nn as nn
 from torch.nn.init import xavier_normal_, constant_
 
-from recbole.model.abstract_recommender import ContextRecommender
+from recbole.model.abstract_recommender_my import ContextRecommender
 from recbole.model.layers import MLPLayers
 
 
@@ -61,15 +61,17 @@ class DSSM(ContextRecommender):
         self.sigmoid = nn.Sigmoid()
 
         # parameters initialization
-        self.apply(self._init_weights)
-
-    def _init_weights(self, module):
-        if isinstance(module, nn.Embedding):
-            xavier_normal_(module.weight.data)
-        elif isinstance(module, nn.Linear):
-            xavier_normal_(module.weight.data)
-            if module.bias is not None:
-                constant_(module.bias.data, 0)
+        for name, submodule in self.named_modules():
+            self._init_weights(name, submodule)
+            
+    def _init_weights(self, name, module):
+        if name not in ['id2afeats', 'id2tfeats']:
+            if isinstance(module, nn.Embedding):
+                xavier_normal_(module.weight.data)
+            elif isinstance(module, nn.Linear):
+                xavier_normal_(module.weight.data)
+                if module.bias is not None:
+                    constant_(module.bias.data, 0)
 
     def forward(self, interaction):
         # user_sparse_embedding shape: [batch_size, user_token_seq_field_num + user_token_field_num , embed_dim] or None

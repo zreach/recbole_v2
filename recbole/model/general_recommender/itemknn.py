@@ -15,7 +15,7 @@ import numpy as np
 import scipy.sparse as sp
 import torch
 
-from recbole.model.abstract_recommender import GeneralRecommender
+from recbole.model.abstract_recommender_my import GeneralRecommender
 from recbole.utils import InputType, ModelType
 
 
@@ -172,12 +172,27 @@ class ItemKNN(GeneralRecommender):
         self.k = config["k"]
         self.shrink = config["shrink"] if "shrink" in config else 0.0
 
+        if self.use_audio:
+            item_features = self.id2afeats.weight.detach().cpu().numpy()
+            item_features_sparse = sp.csr_matrix(item_features)
+ 
+        elif self.use_text:
+            item_features = self.id2tfeats.weight.detach().cpu().numpy()
+            item_features_sparse = sp.csr_matrix(item_features)
+
+
         self.interaction_matrix = dataset.inter_matrix(form="csr").astype(np.float32)
         shape = self.interaction_matrix.shape
         assert self.n_users == shape[0] and self.n_items == shape[1]
-        _, self.w = ComputeSimilarity(
-            self.interaction_matrix, topk=self.k, shrink=self.shrink
-        ).compute_similarity("item")
+        if self.use_audio or self.use_text:
+            _, self.w = ComputeSimilarity(
+                item_features_sparse, topk=self.k, shrink=self.shrink
+            ).compute_similarity("user")
+        else:
+            _, self.w = ComputeSimilarity(
+                self.interaction_matrix, topk=self.k, shrink=self.shrink
+            ).compute_similarity("item")
+
         self.pred_mat = self.interaction_matrix.dot(self.w).tolil()
 
         self.fake_loss = torch.nn.Parameter(torch.zeros(1))

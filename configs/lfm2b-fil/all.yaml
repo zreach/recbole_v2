@@ -1,0 +1,51 @@
+# dataset config
+field_separator: "\t" #指定数据集field的分隔符
+seq_separator: " " #指定数据集中token_seq或者float_seq域里的分隔符
+data_path: "dataset"
+dataset_save_path: ""
+USER_ID_FIELD: user_id #指定用户id域
+ITEM_ID_FIELD: tracks_id #指定物品id域
+RATING_FIELD: num_repeat #指定打分rating域
+TIME_FIELD: timestamp #指定时间域
+NEG_PREFIX: neg_ #指定负采样前缀
+LABEL_FIELD: label #指定标签域
+#因为数据集没有标签，所以设置一个阈值，认为rating高于该值的是正例，反之是负例
+threshold:
+    num_repeat: 2
+#指定从什么文件里读什么列，这里就是从ml-1m.inter里面读取user_id, item_id, rating, timestamp这四列,剩下的以此类推
+load_col:
+    inter: [user_id, tracks_id, num_repeat]
+    user: [user_id, gender, country, age]
+    item: [tracks_id]
+
+numerical_features: [age] #不加这个float特征不会被计算
+discretization:
+    age:
+        method: LD
+        bucket: 10
+    
+
+user_inter_num_interval: [5,1000000]
+item_inter_num_interval: [5,1000000] 
+
+# training settings
+epochs: 10 #训练的最大轮数
+# train_batch_size: 64 #训练的batch_size
+learner: adam #使用的pytorch内置优化器
+learning_rate: 0.005 #学习率
+# training_neg_sample_num: 0 #负采样数目
+eval_step: 1 #每次训练后做evalaution的次数
+stopping_step: 10 #控制训练收敛的步骤数，在该步骤数内若选取的评测标准没有什么变化，就可以提前停止了
+# embedding_size: 10
+
+neg_my: true
+train_neg_sample_args:
+    distribution: "uniform"
+    sample_num: 1
+eval_args:
+    mode:
+        valid: my_uni
+        test: my_uni
+# user_inter_num_interval: [50,10000]
+# item_inter_num_interval: [50,10000]
+# numerical_features: [age, playcount] #不加这个float特征不会被计算

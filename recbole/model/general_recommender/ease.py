@@ -10,7 +10,7 @@ import numpy as np
 import scipy.sparse as sp
 
 from recbole.utils import InputType, ModelType
-from recbole.model.abstract_recommender import GeneralRecommender
+from recbole.model.abstract_recommender_my import GeneralRecommender
 
 
 class EASE(GeneralRecommender):

@@ -13,7 +13,7 @@ Random
 import torch
 import random
 
-from recbole.model.abstract_recommender import GeneralRecommender
+from recbole.model.abstract_recommender_my import GeneralRecommender
 from recbole.utils import InputType, ModelType
 
 

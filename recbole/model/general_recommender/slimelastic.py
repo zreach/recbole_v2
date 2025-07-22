@@ -17,7 +17,7 @@ from sklearn.linear_model import ElasticNet
 from sklearn.exceptions import ConvergenceWarning
 
 from recbole.utils import InputType, ModelType
-from recbole.model.abstract_recommender import GeneralRecommender
+from recbole.model.abstract_recommender_my import GeneralRecommender
 
 
 class SLIMElastic(GeneralRecommender):

@@ -8,11 +8,11 @@ import torch.nn.functional as F
 
 
 from recbole.model.utils.utils import build_sim, compute_normalized_laplacian, build_knn_neighbourhood
-from recbole.model.abstract_recommender_my import GeneralRecommender_my
+from recbole.model.abstract_recommender_my import GeneralRecommender
 from recbole.utils import InputType
 # from recbole.model.layers import MLPLayers
 # from recbole.model.loss import RegLoss
-class LATTICE(GeneralRecommender_my):
+class LATTICE(GeneralRecommender):
     
     input_type = InputType.PAIRWISE
 
@@ -66,7 +66,7 @@ class LATTICE(GeneralRecommender_my):
             if os.path.exists(audio_adj_file):
                 audio_adj = torch.load(audio_adj_file)
             else:
-                audio_adj = build_sim(self.id2feature.weight.detach())
+                audio_adj = build_sim(self.id2afeats.weight.detach())
                 audio_adj = build_knn_neighbourhood(audio_adj, topk=self.knn_k)
                 audio_adj = compute_normalized_laplacian(audio_adj)
                 torch.save(audio_adj, audio_adj_file)
@@ -128,7 +128,7 @@ class LATTICE(GeneralRecommender_my):
     
     def forward(self, adj, build_item_graph=False):
         if self.a_feats is not None:
-            audio_feats = self.audio_trs(self.id2feature.weight)
+            audio_feats = self.audio_trs(self.id2afeats.weight)
         
         if build_item_graph:
             weight = self.softmax(self.modal_weight)

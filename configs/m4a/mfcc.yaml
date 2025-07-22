@@ -1,0 +1,5 @@
+use_cb: true
+
+use_audio: true
+a_feature_path: "dataset/m4a/m4a-mfcc.pkl"
+wav_mlp_sizes: [512, 32]

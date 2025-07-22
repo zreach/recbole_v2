@@ -1,0 +1,8 @@
+# audio相关
+use_cb: true
+
+use_audio: true
+afeat_layer: 11
+a_feature_path: "dataset/lfm2b-fil/lfm2b-muq.pkl"
+wav_mlp_sizes: [512, 32]
+

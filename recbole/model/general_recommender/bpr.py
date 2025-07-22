@@ -18,10 +18,12 @@ Reference:
 import torch
 import torch.nn as nn
 
-from recbole.model.abstract_recommender import GeneralRecommender
+from recbole.model.abstract_recommender_my import GeneralRecommender
 from recbole.model.init import xavier_normal_initialization
 from recbole.model.loss import BPRLoss
 from recbole.utils import InputType
+from tqdm import tqdm
+import pickle
 
 
 class BPR(GeneralRecommender):
@@ -37,11 +39,23 @@ class BPR(GeneralRecommender):
 
         # define layers and loss
         self.user_embedding = nn.Embedding(self.n_users, self.embedding_size)
-        self.item_embedding = nn.Embedding(self.n_items, self.embedding_size)
+        self.has_iid = True
+        if config['no_itemid']:
+            self.has_iid = False
+        if self.has_iid:
+            self.item_embedding = nn.Embedding(self.n_items, self.embedding_size)
         self.loss = BPRLoss()
 
         # parameters initialization
-        self.apply(xavier_normal_initialization)
+        # self.apply(xavier_normal_initialization)
+        for name, submodule in self.named_modules():
+            self._init_weights(name, submodule)
+
+    def _init_weights(self, name, module):
+        if name not in ['id2afeats', 'id2tfeats']:
+            if isinstance(module, nn.Embedding):
+                xavier_normal_initialization(module.weight.data)
+
 
     def get_user_embedding(self, user):
         r"""Get a batch of user embedding tensor according to input user's id.
@@ -63,11 +77,48 @@ class BPR(GeneralRecommender):
         Returns:
             torch.FloatTensor: The embedding tensor of a batch of item, shape: [batch_size, embedding_size]
         """
-        return self.item_embedding(item)
+        if self.has_iid:
+            item_e = self.item_embedding(item)
+        else:
+            item_e = torch.zeros((item.shape[0], self.embedding_size), device=item.device)
+        if self.use_audio:
+            audio_e = self.get_wav_embedding(item)
+            item_e = item_e + audio_e
+        if self.use_text:
+            text_e = self.get_text_embedding(item)
+            item_e = item_e + text_e
+        return item_e
+    
+    def compute_all_item_embeddings(self, batch_size=1024):
+        """
+        Compute all item embeddings in batches to avoid OOM.
+        The result is stored in self.all_item_embeddings_cached.
+        """
+        self.all_item_embeddings_cached = []
+        all_items = torch.arange(self.n_items, device=self.device)
+        for start_idx in tqdm(range(0, self.n_items, batch_size)):
+            item_batch = all_items[start_idx: start_idx + batch_size]
+            item_batch_embedding = self.get_item_embedding(item_batch)
+            # print(item_batch_embedding.shape)
+            self.all_item_embeddings_cached.append(item_batch_embedding.cpu())
+        self.all_item_embeddings_cached = torch.cat(self.all_item_embeddings_cached, dim=0).to(self.device)
 
+    def compute_all_user_embeddings(self, batch_size=1024):
+        """
+        Compute all user embeddings in batches to avoid OOM.
+        The result is stored in self.all_user_embeddings_cached.
+        """
+        self.all_user_embeddings_cached = []
+        all_users = torch.arange(self.n_users, device=self.device)
+        for start_idx in tqdm(range(0, self.n_users, batch_size)):
+            user_batch = all_users[start_idx: start_idx + batch_size]
+            user_batch_embedding = self.get_user_embedding(user_batch)
+            self.all_user_embeddings_cached.append(user_batch_embedding.cpu())
+        self.all_user_embeddings_cached = torch.cat(self.all_user_embeddings_cached, dim=0).to(self.device)
     def forward(self, user, item):
         user_e = self.get_user_embedding(user)
         item_e = self.get_item_embedding(item)
+        
         return user_e, item_e
 
     def calculate_loss(self, interaction):
@@ -92,6 +143,21 @@ class BPR(GeneralRecommender):
     def full_sort_predict(self, interaction):
         user = interaction[self.USER_ID]
         user_e = self.get_user_embedding(user)
-        all_item_e = self.item_embedding.weight
+        # Check if item embeddings are cached, if not, compute them in batches
+        if not hasattr(self, 'all_item_embeddings_cached'):
+            print("Computing all item embeddings...")
+            self.compute_all_item_embeddings()
+            self.compute_all_user_embeddings()
+            embed_dict = {
+                'all_item_embeddings_cached': self.all_item_embeddings_cached.detach().cpu().numpy(),
+                'user_embedding': self.all_user_embeddings_cached.detach().cpu().numpy()
+            }
+            with open('embeddings_cached.pkl', 'wb') as f:
+                pickle.dump(embed_dict, f)
+        # print(self.all_user_embeddings_cached.shape)
+        
+
+        all_item_e = self.all_item_embeddings_cached
+
         score = torch.matmul(user_e, all_item_e.transpose(0, 1))
         return score.view(-1)

@@ -18,7 +18,7 @@ import numpy as np
 import scipy.sparse as sp
 from sklearn.utils.extmath import randomized_svd
 
-from recbole.model.abstract_recommender import GeneralRecommender
+from recbole.model.abstract_recommender_my import GeneralRecommender
 from recbole.utils import InputType
 
 

@@ -90,6 +90,26 @@ class AbstractRecommender(nn.Module):
         )
 
 
+# class GeneralRecommender(AbstractRecommender):
+#     """This is a abstract general recommender. All the general model should implement this class.
+#     The base general recommender class provide the basic dataset and parameters information.
+#     """
+
+#     type = ModelType.GENERAL
+
+#     def __init__(self, config, dataset):
+#         super(GeneralRecommender, self).__init__()
+
+#         # load dataset info
+#         self.USER_ID = config["USER_ID_FIELD"]
+#         self.ITEM_ID = config["ITEM_ID_FIELD"]
+#         self.NEG_ITEM_ID = config["NEG_PREFIX"] + self.ITEM_ID
+#         self.n_users = dataset.num(self.USER_ID)
+#         self.n_items = dataset.num(self.ITEM_ID)
+
+#         # load parameters info
+#         self.device = config["device"]
+
 class GeneralRecommender(AbstractRecommender):
     """This is a abstract general recommender. All the general model should implement this class.
     The base general recommender class provide the basic dataset and parameters information.
@@ -109,26 +129,6 @@ class GeneralRecommender(AbstractRecommender):
 
         # load parameters info
         self.device = config["device"]
-
-class GeneralRecommender_my(AbstractRecommender):
-    """This is a abstract general recommender. All the general model should implement this class.
-    The base general recommender class provide the basic dataset and parameters information.
-    """
-
-    type = ModelType.GENERAL
-
-    def __init__(self, config, dataset):
-        super(GeneralRecommender_my, self).__init__()
-
-        # load dataset info
-        self.USER_ID = config["USER_ID_FIELD"]
-        self.ITEM_ID = config["ITEM_ID_FIELD"]
-        self.NEG_ITEM_ID = config["NEG_PREFIX"] + self.ITEM_ID
-        self.n_users = dataset.num(self.USER_ID)
-        self.n_items = dataset.num(self.ITEM_ID)
-
-        # load parameters info
-        self.device = config["device"]
         
         # multimodal
         self.token2id = dataset.field2token_id
@@ -137,12 +137,10 @@ class GeneralRecommender_my(AbstractRecommender):
 
         self.use_audio = config['use_audio']
         self.use_text = config['use_text']
+        self.embedding_size = config["embedding_size"]
 
         if self.use_cb:
             
-            self.id2msd = {str(k): v for k, v in self.id2msd.items()}
-            self.id2msd['[PAD]'] = '[PAD]'
-
             if self.use_audio:
                 a_feature_path = config['a_feature_path']
                 with open(a_feature_path, 'rb') as fp:
@@ -163,9 +161,12 @@ class GeneralRecommender_my(AbstractRecommender):
             
             
             if config['dataset'] in ['lfm1b-fil', 'm4a-fil']:
+                
                 map_path = config['map_path']
                 with open(map_path, 'rb') as fp:
                     self.id2msd = pickle.load(fp)
+                self.id2msd = {str(k): v for k, v in self.id2msd.items()}
+                self.id2msd['[PAD]'] = '[PAD]'
                 for k, v in self.token2id['tracks_id'].items():
                     # if config['dataset'] == 'm4a-fil':
                     #     k = str(k)
@@ -191,7 +192,7 @@ class GeneralRecommender_my(AbstractRecommender):
                         music_features[v] = torch.Tensor(wav_feature)
                     if self.use_text:
                         text_features[v] = torch.Tensor(text_feature)
-            elif config['dataset'] == 'm4a': # 这个数据没有时间维度， 而且不需要map
+            elif config['dataset'] in ['m4a', 'lfm2b-fil']: # 这个数据没有时间维度， 而且不需要map
                 for k, v in self.token2id['tracks_id'].items():
                     self.id2token[v] = k
                     if k == '[PAD]':
@@ -219,11 +220,39 @@ class GeneralRecommender_my(AbstractRecommender):
                 self.a_feats = music_features
                 self.id2afeats = nn.Embedding.from_pretrained(music_features)
                 self.id2afeats.requires_grad_(False)
+                if self.embedding_size is not None:
+                    size_list = [
+                        self.wav_embedding_size 
+                    ] + config['wav_mlp_sizes'] + [self.embedding_size]
+                    self.wav_mlp = MLPLayers(size_list, 0.2, bn=True)
+                
 
             if self.use_text:
                 self.t_feats = text_features
                 self.id2tfeats = nn.Embedding.from_pretrained(text_features)
                 self.id2tfeats.requires_grad_(False)
+                if self.embedding_size is not None:
+                    size_list = [
+                        self.text_embedding_size 
+                    ] + config['text_mlp_sizes'] + [self.embedding_size]
+                    self.text_mlp = MLPLayers(size_list, 0.2, bn=True)
+
+
+    
+    def get_wav_embedding(self, track_ids):
+
+        wav_features = self.id2afeats(track_ids)
+        # print(wav_features[0])
+        embed_features = self.wav_mlp(wav_features)
+
+        return embed_features
+
+    def get_text_embedding(self, track_ids):
+        text_features = self.id2tfeats(track_ids)
+        # print(text_features[0])
+        embed_features = self.text_mlp(text_features)
+
+        return embed_features
 
 class AutoEncoderMixin(object):
     """This is a common part of auto-encoders. All the auto-encoder models should inherit this class,
@@ -399,7 +428,6 @@ class ContextRecommender(AbstractRecommender):
 
         if self.use_cb:
             
-            
 
             if self.use_audio:
                 a_feature_path = config['a_feature_path']
@@ -451,7 +479,7 @@ class ContextRecommender(AbstractRecommender):
                         music_features[v] = torch.Tensor(wav_feature)
                     if self.use_text:
                         text_features[v] = torch.Tensor(text_feature)
-            elif config['dataset'] == 'm4a': # 这个数据没有时间维度， 而且不需要map
+            elif config['dataset'] in ['m4a', 'lfm2b-fil']: # 这个数据没有时间维度， 而且不需要map
                 for k, v in self.token2id['tracks_id'].items():
                     self.id2token[v] = k
                     if k == '[PAD]':
