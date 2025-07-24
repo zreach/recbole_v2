@@ -33,6 +33,7 @@ stopping_step: 10 #控制训练收敛的步骤数，在该步骤数内若选取�
 
 # audio相关
 use_cb: true
+use_audio: true
 afeat_layer: 11
 no_itemid: true
 # a_feature_path: "dataset/m4a-fil/m4a-muq-last.pkl"
