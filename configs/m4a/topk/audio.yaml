@@ -2,6 +2,6 @@
 use_cb: true
 
 use_audio: true
-afeat_layer: 11
+afeat_layer: 10
 a_feature_path: "dataset/m4a/m4a-muq.pkl"
 wav_mlp_sizes: [64]

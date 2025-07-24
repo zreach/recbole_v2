@@ -139,6 +139,9 @@ class GeneralRecommender(AbstractRecommender):
         self.use_text = config['use_text']
         self.embedding_size = config["embedding_size"]
 
+        self.a_feats = None 
+        self.t_feats = None
+
         if self.use_cb:
             
             if self.use_audio:
@@ -194,6 +197,7 @@ class GeneralRecommender(AbstractRecommender):
                         text_features[v] = torch.Tensor(text_feature)
             elif config['dataset'] in ['m4a', 'lfm2b-fil']: # 这个数据没有时间维度， 而且不需要map
                 for k, v in self.token2id['tracks_id'].items():
+                    k = str(k)
                     self.id2token[v] = k
                     if k == '[PAD]':
                         if self.use_audio:
@@ -202,7 +206,11 @@ class GeneralRecommender(AbstractRecommender):
                             text_feature = np.zeros((self.text_embedding_size))
                     else:
                         if self.use_text:
-                            text_feature = text_features_array[k]
+                            if k in text_features_array: #TODO 没对上
+                                text_feature = text_features_array[k]
+                            else:
+                                print(1)
+                                text_feature = np.zeros((self.text_embedding_size))
                         if self.use_audio:
                             layer = config['afeat_layer']
                             

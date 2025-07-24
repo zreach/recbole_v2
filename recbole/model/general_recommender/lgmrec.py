@@ -1,19 +1,24 @@
-import os
-import random
+# coding: utf-8
+# @email: georgeguo.gzq.cn@gmail.com
+r"""
+LGMRec
+################################################
+Reference:
+    https://github.com/georgeguo-cn/LGMRec
+    AAAI'2024: [LGMRec: Local and Global Graph Learning for Multimodal Recommendation]
+"""
+
 import numpy as np
 import scipy.sparse as sp
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-
-
 from recbole.model.abstract_recommender_my import GeneralRecommender
 from recbole.utils import InputType
 
 class LGMRec(GeneralRecommender):
     input_type = InputType.PAIRWISE
     def __init__(self, config, dataset):
-        self.t_feat = None
         super(LGMRec, self).__init__(config, dataset)
 
         self.embedding_dim = config['embedding_size']
@@ -46,17 +51,17 @@ class LGMRec(GeneralRecommender):
         nn.init.xavier_uniform_(self.user_embedding.weight)
         nn.init.xavier_uniform_(self.item_id_embedding.weight)
 
-        self.drop = nn.Dropout(p=self.dropout)
+        self.drop = nn.Dropout(self.dropout)
 
         # load item modal features and define hyperedges embeddings
         if self.a_feats is not None:
-            self.audio_embedding = nn.Embedding.from_pretrained(self.a_feats, freeze=True)
-            self.item_audio_trs = nn.Parameter(nn.init.xavier_uniform_(torch.zeros(self.a_feats.shape[1], self.feat_embed_dim)))
+            self.image_embedding = nn.Embedding.from_pretrained(self.a_feats, freeze=True)
+            self.item_image_trs = nn.Parameter(nn.init.xavier_uniform_(torch.zeros(self.a_feats.shape[1], self.feat_embed_dim)))
             self.v_hyper = nn.Parameter(nn.init.xavier_uniform_(torch.zeros(self.a_feats.shape[1], self.hyper_num)))
-        # if self.t_feat is not None:
-        #     self.text_embedding = nn.Embedding.from_pretrained(self.t_feat, freeze=True)
-        #     self.item_text_trs = nn.Parameter(nn.init.xavier_uniform_(torch.zeros(self.t_feat.shape[1], self.feat_embed_dim)))
-        #     self.t_hyper = nn.Parameter(nn.init.xavier_uniform_(torch.zeros(self.t_feat.shape[1], self.hyper_num)))
+        if self.t_feats is not None:
+            self.text_embedding = nn.Embedding.from_pretrained(self.t_feats, freeze=True)
+            self.item_text_trs = nn.Parameter(nn.init.xavier_uniform_(torch.zeros(self.t_feats.shape[1], self.feat_embed_dim)))
+            self.t_hyper = nn.Parameter(nn.init.xavier_uniform_(torch.zeros(self.t_feats.shape[1], self.hyper_num)))
             
     def scipy_matrix_to_sparse_tenser(self, matrix, shape):
         row = matrix.row
@@ -74,7 +79,6 @@ class LGMRec(GeneralRecommender):
         # A._update(data_dict)
         for (row, col), value in data_dict.items():
             A[row, col] = value
-
         # norm adj matrix
         sumArr = (A > 0).sum(axis=1)
         # add epsilon to avoid Devide by zero Warning
@@ -103,7 +107,7 @@ class LGMRec(GeneralRecommender):
     # modality graph embedding
     def mge(self, str='v'):
         if str == 'v':
-            item_feats = torch.mm(self.audio_embedding.weight, self.item_audio_trs)
+            item_feats = torch.mm(self.image_embedding.weight, self.item_image_trs)
         elif str == 't':
             item_feats = torch.mm(self.text_embedding.weight, self.item_text_trs)
         user_feats = torch.sparse.mm(self.adj, item_feats) * self.num_inters[:self.n_users]
@@ -116,25 +120,25 @@ class LGMRec(GeneralRecommender):
     def forward(self):
         # hyperedge dependencies constructing
         if self.a_feats is not None:
-            iv_hyper = torch.mm(self.audio_embedding.weight, self.v_hyper)
+            iv_hyper = torch.mm(self.image_embedding.weight, self.v_hyper)
             uv_hyper = torch.mm(self.adj, iv_hyper)
             iv_hyper = F.gumbel_softmax(iv_hyper, self.tau, dim=1, hard=False)
             uv_hyper = F.gumbel_softmax(uv_hyper, self.tau, dim=1, hard=False)
-        # if self.t_feat is not None:
-        #     it_hyper = torch.mm(self.text_embedding.weight, self.t_hyper)
-        #     ut_hyper = torch.mm(self.adj, it_hyper)
-        #     it_hyper = F.gumbel_softmax(it_hyper, self.tau, dim=1, hard=False)
-        #     ut_hyper = F.gumbel_softmax(ut_hyper, self.tau, dim=1, hard=False)
+        if self.t_feats is not None:
+            it_hyper = torch.mm(self.text_embedding.weight, self.t_hyper)
+            ut_hyper = torch.mm(self.adj, it_hyper)
+            it_hyper = F.gumbel_softmax(it_hyper, self.tau, dim=1, hard=False)
+            ut_hyper = F.gumbel_softmax(ut_hyper, self.tau, dim=1, hard=False)
         
         # CGE: collaborative graph embedding
         cge_embs = self.cge()
         
-        if self.a_feats is not None and self.t_feat is not None:
+        if self.a_feats is not None and self.t_feats is not None:
             # MGE: modal graph embedding
-            a_featss = self.mge('v')
+            a_feats = self.mge('v')
             t_feats = self.mge('t')
             # local embeddings = collaborative-related embedding + modality-related embedding
-            mge_embs = F.normalize(a_featss) + F.normalize(t_feats)
+            mge_embs = F.normalize(a_feats) + F.normalize(t_feats)
             lge_embs = cge_embs + mge_embs
             # GHE: global hypergraph embedding
             uv_hyper_embs, iv_hyper_embs = self.hgnnLayer(self.drop(iv_hyper), self.drop(uv_hyper), cge_embs[self.n_users:])
@@ -146,12 +150,6 @@ class LGMRec(GeneralRecommender):
             all_embs = lge_embs + self.alpha * F.normalize(ghe_embs)
         else:
             all_embs = cge_embs
-            # lge_embs = cge_embs + mge_embs
-            # uv_hyper_embs, iv_hyper_embs = self.hgnnLayer(self.drop(iv_hyper), self.drop(uv_hyper), cge_embs[self.n_users:])
-            # av_hyper_embs = torch.concat([uv_hyper_embs, iv_hyper_embs], dim=0)
-            # all_embs = lge_embs + self.alpha * F.normalize(ghe_embs)
-            ut_hyper_embs, it_hyper_embs, uv_hyper_embs, iv_hyper_embs  = None, None, None, None
-            
 
         u_embs, i_embs = torch.split(all_embs, [self.n_users, self.n_items], dim=0)
 
@@ -185,7 +183,6 @@ class LGMRec(GeneralRecommender):
         users = interaction[self.USER_ID]
         pos_items = interaction[self.ITEM_ID]
         neg_items = interaction[self.NEG_ITEM_ID]
-        
         u_g_embeddings = ua_embeddings[users]
         pos_i_g_embeddings = ia_embeddings[pos_items]
         neg_i_g_embeddings = ia_embeddings[neg_items]
@@ -202,9 +199,9 @@ class LGMRec(GeneralRecommender):
         return loss
 
     def full_sort_predict(self, interaction):
-        users = interaction[self.USER_ID]
+        user = interaction[self.USER_ID]
         user_embs, item_embs, _ = self.forward()
-        scores = torch.matmul(user_embs[users], item_embs.T)
+        scores = torch.matmul(user_embs[user], item_embs.T)
         return scores
 
 class HGNNLayer(nn.Module):

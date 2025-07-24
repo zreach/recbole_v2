@@ -31,6 +31,7 @@ from recbole.model.general_recommender.simplex import SimpleX
 from recbole.model.general_recommender.diffrec import DiffRec
 from recbole.model.general_recommender.ldiffrec import LDiffRec
 
+from recbole.model.general_recommender.vbpr import VBPR
 from recbole.model.general_recommender.lattice import LATTICE
 from recbole.model.general_recommender.freedom import FREEDOM
 from recbole.model.general_recommender.smore import SMORE

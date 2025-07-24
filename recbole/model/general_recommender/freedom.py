@@ -50,11 +50,11 @@ class FREEDOM(GeneralRecommender):
         mm_adj_file = os.path.join(dataset_path, 'mm_adj_freedomdsp_{}_{}.pt'.format(self.knn_k, int(10*self.mm_audio_weight)))
 
         if self.a_feats is not None:
-            self.audio_embedding = self.id2feature.to(self.device)
+            self.audio_embedding = self.id2afeats.to(self.device)
             self.audio_trs = nn.Linear(self.a_feats.shape[1], self.feat_embed_dim)
-        # if self.t_feat is not None:
-        #     self.text_embedding = nn.Embedding.from_pretrained(self.t_feat, freeze=False)
-        #     self.text_trs = nn.Linear(self.t_feat.shape[1], self.feat_embed_dim)
+        if self.t_feats is not None:
+            self.text_embedding = self.id2tfeats.to(self.device)
+            self.text_trs = nn.Linear(self.t_feats.shape[1], self.feat_embed_dim)
 
         if os.path.exists(mm_adj_file):
             self.mm_adj = torch.load(mm_adj_file)
@@ -62,13 +62,13 @@ class FREEDOM(GeneralRecommender):
             if self.a_feats is not None:
                 indices, audio_adj = self.get_knn_adj_mat(self.audio_embedding.weight.detach())
                 self.mm_adj = audio_adj
-            # if self.t_feat is not None:
-            #     indices, text_adj = self.get_knn_adj_mat(self.text_embedding.weight.detach())
-            #     self.mm_adj = text_adj
-            # if self.a_feats is not None and self.t_feat is not None:
-            #     self.mm_adj = self.mm_audio_weight * audio_adj + (1.0 - self.mm_audio_weight) * text_adj
-            #     del text_adj
-            #     del audio_adj
+            if self.t_feats is not None:
+                indices, text_adj = self.get_knn_adj_mat(self.text_embedding.weight.detach())
+                self.mm_adj = text_adj
+            if self.a_feats is not None and self.t_feats is not None:
+                self.mm_adj = self.mm_audio_weight * audio_adj + (1.0 - self.mm_audio_weight) * text_adj
+                del text_adj
+                del audio_adj
             torch.save(self.mm_adj, mm_adj_file)
 
     def get_knn_adj_mat(self, mm_embeddings):
@@ -198,9 +198,9 @@ class FREEDOM(GeneralRecommender):
         batch_mf_loss = self.bpr_loss(u_g_embeddings, pos_i_g_embeddings,
                                                                       neg_i_g_embeddings)
         mf_v_loss, mf_t_loss = 0.0, 0.0
-        # if self.t_feat is not None:
-        #     text_feats = self.text_trs(self.text_embedding.weight)
-        #     mf_t_loss = self.bpr_loss(ua_embeddings[users], text_feats[pos_items], text_feats[neg_items])
+        if self.t_feats is not None:
+            text_feats = self.text_trs(self.text_embedding.weight)
+            mf_t_loss = self.bpr_loss(ua_embeddings[users], text_feats[pos_items], text_feats[neg_items])
         if self.a_feats is not None:
             audio_feats = self.audio_trs(self.audio_embedding.weight)
             mf_v_loss = self.bpr_loss(ua_embeddings[users], audio_feats[pos_items], audio_feats[neg_items])

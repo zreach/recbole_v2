@@ -59,7 +59,7 @@ class LATTICE(GeneralRecommender):
 
         dataset_path = os.path.abspath(config['data_path'])
         audio_adj_file = os.path.join(dataset_path, 'audio_adj_{}.pt'.format(self.knn_k))
-        # text_adj_file = os.path.join(dataset_path, 'text_adj_{}.pt'.format(self.knn_k))
+        text_adj_file = os.path.join(dataset_path, 'text_adj_{}.pt'.format(self.knn_k))
 
         if self.a_feats is not None:
             self.audio_embedding = self.a_feats
@@ -72,21 +72,21 @@ class LATTICE(GeneralRecommender):
                 torch.save(audio_adj, audio_adj_file)
             self.audio_original_adj = audio_adj.cuda()
 
-        # if self.t_feat is not None:
-        #     self.text_embedding = nn.Embedding.from_pretrained(self.t_feat, freeze=False)
-        #     if os.path.exists(text_adj_file):
-        #         text_adj = torch.load(text_adj_file)
-        #     else:
-        #         text_adj = build_sim(self.text_embedding.weight.detach())
-        #         text_adj = build_knn_neighbourhood(text_adj, topk=self.knn_k)
-        #         text_adj = compute_normalized_laplacian(text_adj)
-        #         torch.save(text_adj, text_adj_file)
-        #     self.text_original_adj = text_adj.cuda()
+        if self.t_feats is not None:
+            self.text_embedding = nn.Embedding.from_pretrained(self.t_feats, freeze=False)
+            if os.path.exists(text_adj_file):
+                text_adj = torch.load(text_adj_file)
+            else:
+                text_adj = build_sim(self.text_embedding.weight.detach())
+                text_adj = build_knn_neighbourhood(text_adj, topk=self.knn_k)
+                text_adj = compute_normalized_laplacian(text_adj)
+                torch.save(text_adj, text_adj_file)
+            self.text_original_adj = text_adj.cuda()
 
         if self.a_feats is not None:
             self.audio_trs = nn.Linear(self.a_feats.shape[1], self.feat_embed_dim)
-        # if self.t_feat is not None:
-        #     self.text_trs = nn.Linear(self.t_feat.shape[1], self.feat_embed_dim)
+        # if self.t_feats is not None:
+        #     self.text_trs = nn.Linear(self.t_feats.shape[1], self.feat_embed_dim)
 
         self.modal_weight = nn.Parameter(torch.Tensor([0.5, 0.5]))
         self.softmax = nn.Softmax(dim=0)
@@ -139,7 +139,7 @@ class LATTICE(GeneralRecommender):
                 learned_adj = self.audio_adj
                 original_adj = self.audio_original_adj
 
-            # if self.a_feats is not None and self.t_feat is not None:
+            # if self.a_feats is not None and self.t_feats is not None:
             #     learned_adj = weight[0] * self.audio_adj + weight[1] * self.text_adj
             #     original_adj = weight[0] * self.audio_original_adj + weight[1] * self.text_original_adj
 

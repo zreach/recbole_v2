@@ -9,7 +9,7 @@ n_mm_layers: 1
 n_ui_layers: 2
 knn_k: 10
 
-mm_audio_weight: 0.1
+mm_audio_weight: 0.5
 dropout: 0.8
 
 hyper_parameters: ["dropout", "reg_weight"]
