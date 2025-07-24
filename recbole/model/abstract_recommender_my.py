@@ -162,7 +162,12 @@ class GeneralRecommender(AbstractRecommender):
                 text_features_array['[PAD]'] = np.zeros((self.text_embedding_size))
                 text_features = torch.zeros((len(self.token2id['tracks_id']), self.text_embedding_size ))
             
-            
+            # if config['norm_audio']:
+            #     for k, v in music_features_array.items():
+            #         norm = np.linalg.norm(v, axis=1, keepdims=True)
+            #         norm[norm == 0] = 1e-12
+            #         music_features_array[k] = v / norm
+
             if config['dataset'] in ['lfm1b-fil', 'm4a-fil']:
                 
                 map_path = config['map_path']
@@ -206,7 +211,7 @@ class GeneralRecommender(AbstractRecommender):
                             text_feature = np.zeros((self.text_embedding_size))
                     else:
                         if self.use_text:
-                            if k in text_features_array: #TODO 没对上
+                            if k in text_features_array: 
                                 text_feature = text_features_array[k]
                             else:
                                 print(1)
@@ -215,7 +220,10 @@ class GeneralRecommender(AbstractRecommender):
                             layer = config['afeat_layer']
                             
                             if layer is not None:
-                                wav_feature = music_features_array[k][layer]
+                                if layer == 'mean':
+                                    wav_feature = np.mean(music_features_array[k], axis=0)
+                                else:
+                                    wav_feature = music_features_array[k][layer]
                             else:
                                 wav_feature = music_features_array[k]
                     # print('layer', layer)
@@ -502,7 +510,10 @@ class ContextRecommender(AbstractRecommender):
                             layer = config['afeat_layer']
                             
                             if layer is not None:
-                                wav_feature = music_features_array[k][layer]
+                                if layer == 'mean':
+                                    wav_feature = np.mean(music_features_array[k], axis=0)
+                                else:
+                                    wav_feature = music_features_array[k][layer]
                             else:
                                 wav_feature = music_features_array[k]
                     # print('layer', layer)

@@ -36,6 +36,8 @@ class WuKong(ContextRecommender):
         self.fmb_units = config["fmb_units"]
         self.fmb_dim = config["fmb_dim"]
         self.project_dim = config["project_dim"]
+        # self.project_dim = config["embedding_size"]
+        # self.fmb_dim = config["embedding_size"]
         self.dropout_prob = config["dropout_prob"]
 
         # define layers and loss
@@ -55,7 +57,9 @@ class WuKong(ContextRecommender):
         self.final_mlp = MLPLayers(
             layers=[self.num_feature_field * self.embedding_size] + self.mlp_hidden_sizes + [1],
             dropout=self.dropout_prob,
-            activation='relu'
+            activation='relu',
+            bn=False,
+            last_activation=None
         )
         
         self.sigmoid = nn.Sigmoid()
@@ -66,7 +70,7 @@ class WuKong(ContextRecommender):
             self._init_weights(name, submodule)
 
     def _init_weights(self, name, module):
-        if name != 'id2feature':
+        if name not in ['id2afeats', 'id2tfeats']:
             if isinstance(module, nn.Embedding):
                 xavier_normal_(module.weight.data)
             elif isinstance(module, nn.Linear):
@@ -96,32 +100,32 @@ class WuKong(ContextRecommender):
         label = interaction[self.LABEL]
         output = self.forward(interaction)
         # print(self.loss(output, label.float()))
-        return self.loss(output, label.float())
+        return self.loss(output, label)
 
     def predict(self, interaction):
         return self.sigmoid(self.forward(interaction))
 
 
-# class FactorizationMachineBlock(nn.Module):
-#     def __init__(self, num_features=14, embedding_dim=16, project_dim=8):
-#         super(FactorizationMachineBlock, self).__init__()
-#         self.embedding_dim = embedding_dim
-#         self.project_dim = project_dim
-#         self.num_features = num_features
-#         self.projection_matrix = nn.Parameter(torch.randn(self.num_features, self.project_dim))
+class FactorizationMachineBlock(nn.Module):
+    def __init__(self, num_features=14, embedding_dim=16, project_dim=8):
+        super(FactorizationMachineBlock, self).__init__()
+        self.embedding_dim = embedding_dim
+        self.project_dim = project_dim
+        self.num_features = num_features
+        self.projection_matrix = nn.Parameter(torch.randn(self.num_features, self.project_dim))
     
-#     def forward(self, x):
-#         batch_size = x.size(0)
-#         x_fm = x.view(batch_size, self.num_features, self.embedding_dim)
-#         projected = torch.matmul(x_fm.transpose(1, 2), self.projection_matrix)
-#         fm_matrix = torch.matmul(x_fm, projected)
-#         return fm_matrix.view(batch_size, -1)
+    def forward(self, x):
+        batch_size = x.size(0)
+        x_fm = x.view(batch_size, self.num_features, self.embedding_dim)
+        projected = torch.matmul(x_fm.transpose(1, 2), self.projection_matrix)
+        fm_matrix = torch.matmul(x_fm, projected)
+        return fm_matrix.view(batch_size, -1)
 
 
 class FMB(nn.Module):
-    def __init__(self, num_features=14, fmb_units=[32,32], fmb_dim=40, project_dim=8):
+    def __init__(self, num_features=14, embedding_dim=16, fmb_units=[32,32], fmb_dim=40, project_dim=8):
         super(FMB, self).__init__()
-        self.fm_block = BaseFactorizationMachine(reduce_sum=True)
+        self.fm_block = FactorizationMachineBlock(num_features, embedding_dim, project_dim)
         self.layer_norm = nn.LayerNorm(num_features * project_dim)
         model_layers = [nn.Linear(num_features * project_dim, fmb_units[0]), nn.ReLU()]
         for i in range(1, len(fmb_units)):
@@ -154,6 +158,7 @@ class WuKongLayer(nn.Module):
     def __init__(self, num_features=14, embedding_dim=16, project_dim=4, fmb_units=[40,40,40], fmb_dim=40, compressed_dim=40, dropout_rate=0.2):
         super(WuKongLayer, self).__init__()
         self.fmb = FMB(num_features, embedding_dim, fmb_units, fmb_dim, project_dim)
+        # self.fmb = BaseFactorizationMachine(reduce_sum=False)
         self.lcb = LinearCompressionBlock(num_features, embedding_dim, compressed_dim, dropout_rate)
         self.layer_norm = nn.LayerNorm(num_features * embedding_dim)
         self.transform = nn.Linear(fmb_dim + compressed_dim, num_features * embedding_dim)
@@ -164,4 +169,5 @@ class WuKongLayer(nn.Module):
         concat_out = torch.cat([fmb_out, lcb_out], dim=1)
         concat_out = self.transform(concat_out)
         add_norm_out = self.layer_norm(concat_out + x.view(x.size(0), -1))
+        # add_norm_out = concat_out + x.view(x.size(0), -1)
         return add_norm_out.view(x.size(0), x.size(1), x.size(2))
