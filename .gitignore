@@ -14,4 +14,4 @@ docs/build/
 wandb/*
 /ray_log*
 
-dataset/*
+dataset/
