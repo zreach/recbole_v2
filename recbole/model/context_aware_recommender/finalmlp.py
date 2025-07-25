@@ -77,15 +77,17 @@ class FinalMLP(ContextRecommender):
         self.loss = nn.BCEWithLogitsLoss()
 
         # parameters initialization
-        self.apply(self._init_weights)
-
-    def _init_weights(self, module):
-        if isinstance(module, nn.Embedding):
-            xavier_normal_(module.weight.data)
-        elif isinstance(module, nn.Linear):
-            xavier_normal_(module.weight.data)
-            if module.bias is not None:
-                constant_(module.bias.data, 0)
+        for name, submodule in self.named_modules():
+            self._init_weights(name, submodule)
+    
+    def _init_weights(self, name, module):
+        if name not in ['id2afeats', 'id2tfeats']:
+            if isinstance(module, nn.Embedding):
+                xavier_normal_(module.weight.data)
+            elif isinstance(module, nn.Linear):
+                xavier_normal_(module.weight.data)
+                if module.bias is not None:
+                    constant_(module.bias.data, 0)
 
     def forward(self, interaction):
         finalmlp_all_embeddings = self.concat_embed_input_fields(interaction)  # [batch_size, num_field, embed_dim]

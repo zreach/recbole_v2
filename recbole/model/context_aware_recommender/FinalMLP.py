@@ -14,43 +14,18 @@
 # limitations under the License.
 # =========================================================================
 
-import torch
-from torch import nn
-from fuxictr.pytorch.models import BaseModel
-from fuxictr.pytorch.layers import FeatureEmbedding, MLP_Block
+import torch.nn as nn
+from torch.nn.init import xavier_normal_, constant_
+
+from recbole.model.abstract_recommender_my import ContextRecommender
+from recbole.model.layers import BaseFactorizationMachine, MLPLayers
 
 
-class FinalMLP(BaseModel):
-    def __init__(self, 
-                 feature_map, 
-                 model_id="FinalMLP",
-                 gpu=-1,
-                 learning_rate=1e-3,
-                 embedding_dim=10,
-                 mlp1_hidden_units=[64, 64, 64],
-                 mlp1_hidden_activations="ReLU",
-                 mlp1_dropout=0,
-                 mlp1_batch_norm=False,
-                 mlp2_hidden_units=[64, 64, 64],
-                 mlp2_hidden_activations="ReLU",
-                 mlp2_dropout=0,
-                 mlp2_batch_norm=False,
-                 use_fs=True,
-                 fs_hidden_units=[64],
-                 fs1_context=[],
-                 fs2_context=[],
-                 num_heads=1,
-                 embedding_regularizer=None,
-                 net_regularizer=None,
-                 **kwargs):
-        super(FinalMLP, self).__init__(feature_map, 
-                                       model_id=model_id, 
-                                       gpu=gpu, 
-                                       embedding_regularizer=embedding_regularizer, 
-                                       net_regularizer=net_regularizer,
-                                       **kwargs)
-        self.embedding_layer = FeatureEmbedding(feature_map, embedding_dim)
-        feature_dim = embedding_dim * feature_map.num_fields
+class FinalMLP(ContextRecommender):
+    def __init__(self, config, dataset):
+        super(FinalMLP, self).__init__(config, dataset)
+        # self.embedding_layer = FeatureEmbedding(feature_map, embedding_dim)
+        feature_dim = embedding_dim * self.num_fields
         self.mlp1 = MLP_Block(input_dim=feature_dim,
                               output_dim=None, 
                               hidden_units=mlp1_hidden_units,
