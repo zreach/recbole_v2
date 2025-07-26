@@ -96,7 +96,7 @@ class MaskNet(ContextRecommender):
 class SerialMaskNet(nn.Module):
     def __init__(self, input_dim, output_dim=None, hidden_units=[], reduction_ratio=1, dropout_rates=0):
         super(SerialMaskNet, self).__init__()
-        print(dropout_rates)
+        # print(dropout_rates)
         if not isinstance(dropout_rates, list):
             dropout_rates = [dropout_rates] * len(hidden_units)
         
