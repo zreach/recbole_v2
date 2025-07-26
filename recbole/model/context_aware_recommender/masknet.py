@@ -86,7 +86,7 @@ class MaskNet(ContextRecommender):
     def calculate_loss(self, interaction):
         label = interaction[self.LABEL]
         output = self.forward(interaction)
-        print(self.loss(output, label.float()).item())
+        # print(self.loss(output, label.float()).item())
         return self.loss(output, label.float())
 
     def predict(self, interaction):
