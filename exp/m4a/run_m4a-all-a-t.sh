@@ -1,4 +1,5 @@
 model=${1:-"FM"}
 gpu_id=${2:-"0"}
+a_layer=${3:-"11"}
 
-python run_recbole.py --dataset=m4a --config_files="configs/m4a/all.yaml configs/m4a/audio.yaml configs/m4a/text.yaml" --model=$model --task_name=all-a-t --gpu_id=$gpu_id
+python run_recbole.py --dataset=m4a --config_files="configs/m4a/all.yaml configs/m4a/audio.yaml configs/m4a/text.yaml" --model=$model --task_name=all-a-t --gpu_id=$gpu_id --afeat_layer=$a_layer
