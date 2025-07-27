@@ -25,21 +25,10 @@ class FinalMLP(ContextRecommender):
     def __init__(self, config, dataset):
         super(FinalMLP, self).__init__(config, dataset)
         # self.embedding_layer = FeatureEmbedding(feature_map, embedding_dim)
-        feature_dim = embedding_dim * self.num_fields
-        self.mlp1 = MLP_Block(input_dim=feature_dim,
-                              output_dim=None, 
-                              hidden_units=mlp1_hidden_units,
-                              hidden_activations=mlp1_hidden_activations,
-                              output_activation=None,
-                              dropout_rates=mlp1_dropout,
-                              batch_norm=mlp1_batch_norm)
-        self.mlp2 = MLP_Block(input_dim=feature_dim,
-                              output_dim=None, 
-                              hidden_units=mlp2_hidden_units,
-                              hidden_activations=mlp2_hidden_activations,
-                              output_activation=None,
-                              dropout_rates=mlp2_dropout, 
-                              batch_norm=mlp2_batch_norm)
+
+        
+        feature_dim = self.embedding_size * self.num_feature_field
+        
         self.use_fs = use_fs
         if self.use_fs:
             self.fs_module = FeatureSelection(feature_map, 
