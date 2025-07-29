@@ -1,0 +1,77 @@
+afeat_layer:mean
+Valid result:
+auc : 0.8617    logloss : 0.3884    ndcg : 1.0
+Test result:
+auc : 0.8623    logloss : 0.3877    ndcg : 1.0
+
+afeat_layer:6
+Valid result:
+auc : 0.8622    logloss : 0.3885    ndcg : 1.0
+Test result:
+auc : 0.8628    logloss : 0.3879    ndcg : 1.0
+
+afeat_layer:10
+Valid result:
+auc : 0.8599    logloss : 0.3913    ndcg : 0.9052
+Test result:
+auc : 0.8608    logloss : 0.3904    ndcg : 1.0
+
+afeat_layer:1
+Valid result:
+auc : 0.8613    logloss : 0.3896    ndcg : 1.0
+Test result:
+auc : 0.8619    logloss : 0.389    ndcg : 1.0
+
+afeat_layer:8
+Valid result:
+auc : 0.8606    logloss : 0.392    ndcg : 1.0
+Test result:
+auc : 0.8611    logloss : 0.3914    ndcg : 1.0
+
+afeat_layer:4
+Valid result:
+auc : 0.8608    logloss : 0.3891    ndcg : 0.89
+Test result:
+auc : 0.8612    logloss : 0.3887    ndcg : 1.0
+
+afeat_layer:5
+Valid result:
+auc : 0.8613    logloss : 0.3926    ndcg : 1.0
+Test result:
+auc : 0.8615    logloss : 0.3924    ndcg : 1.0
+
+afeat_layer:7
+Valid result:
+auc : 0.8601    logloss : 0.3894    ndcg : 1.0
+Test result:
+auc : 0.8607    logloss : 0.3887    ndcg : 1.0
+
+afeat_layer:9
+Valid result:
+auc : 0.8589    logloss : 0.3947    ndcg : 0.9266
+Test result:
+auc : 0.8594    logloss : 0.3942    ndcg : 1.0
+
+afeat_layer:11
+Valid result:
+auc : 0.8613    logloss : 0.3891    ndcg : 1.0
+Test result:
+auc : 0.8621    logloss : 0.388    ndcg : 1.0
+
+afeat_layer:0
+Valid result:
+auc : 0.8604    logloss : 0.39    ndcg : 1.0
+Test result:
+auc : 0.8612    logloss : 0.389    ndcg : 1.0
+
+afeat_layer:3
+Valid result:
+auc : 0.8605    logloss : 0.3896    ndcg : 1.0
+Test result:
+auc : 0.861    logloss : 0.3892    ndcg : 0.9306
+
+
+
+best params: {'afeat_layer': 6}
+best result: 
+{'model': 'NFM', 'best_valid_score': np.float64(0.8622), 'valid_score_bigger': True, 'best_valid_result': OrderedDict([('auc', np.float64(0.8622)), ('logloss', np.float64(0.3885)), ('ndcg', np.float64(1.0))]), 'test_result': OrderedDict([('auc', np.float64(0.8628)), ('logloss', np.float64(0.3879)), ('ndcg', np.float64(1.0))])}

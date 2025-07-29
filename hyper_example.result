@@ -1,72 +1,78 @@
-afeat_layer:8
-Valid result:
-auc : 0.8075    logloss : 0.3534    ndcg : 1.0
-Test result:
-auc : 0.8083    logloss : 0.3535    ndcg : 1.0
-
-afeat_layer:11
-Valid result:
-auc : 0.8077    logloss : 0.3544    ndcg : 1.0
-Test result:
-auc : 0.8096    logloss : 0.3536    ndcg : 1.0
-
-afeat_layer:9
-Valid result:
-auc : 0.8065    logloss : 0.3543    ndcg : 1.0
-Test result:
-auc : 0.8081    logloss : 0.3539    ndcg : 1.0
-
-afeat_layer:1
-Valid result:
-auc : 0.8056    logloss : 0.3545    ndcg : 1.0
-Test result:
-auc : 0.8066    logloss : 0.3547    ndcg : 1.0
-
-afeat_layer:7
-Valid result:
-auc : 0.806    logloss : 0.3542    ndcg : 1.0
-Test result:
-auc : 0.8076    logloss : 0.354    ndcg : 1.0
-
 afeat_layer:5
 Valid result:
-auc : 0.8085    logloss : 0.3528    ndcg : 1.0
+auc : 0.8132    logloss : 0.3528    ndcg : 1.0
 Test result:
-auc : 0.8094    logloss : 0.3527    ndcg : 1.0
-
-afeat_layer:3
-Valid result:
-auc : 0.8051    logloss : 0.3547    ndcg : 1.0
-Test result:
-auc : 0.8062    logloss : 0.3545    ndcg : 1.0
-
-afeat_layer:6
-Valid result:
-auc : 0.8076    logloss : 0.3523    ndcg : 1.0
-Test result:
-auc : 0.8081    logloss : 0.3529    ndcg : 1.0
-
-afeat_layer:4
-Valid result:
-auc : 0.807    logloss : 0.3538    ndcg : 1.0
-Test result:
-auc : 0.8087    logloss : 0.3532    ndcg : 1.0
-
-afeat_layer:2
-Valid result:
-auc : 0.8072    logloss : 0.3526    ndcg : 1.0
-Test result:
-auc : 0.8077    logloss : 0.3532    ndcg : 1.0
-
-afeat_layer:10
-Valid result:
-auc : 0.8064    logloss : 0.3537    ndcg : 1.0
-Test result:
-auc : 0.8072    logloss : 0.3542    ndcg : 1.0
+auc : 0.8142    logloss : 0.353    ndcg : 1.0
 
 afeat_layer:0
 Valid result:
-auc : 0.8067    logloss : 0.3546    ndcg : 1.0
+auc : 0.8114    logloss : 0.3518    ndcg : 1.0
 Test result:
-auc : 0.8081    logloss : 0.3545    ndcg : 1.0
+auc : 0.8121    logloss : 0.3523    ndcg : 1.0
+
+afeat_layer:mean
+Valid result:
+auc : 0.8123    logloss : 0.349    ndcg : 1.0
+Test result:
+auc : 0.8137    logloss : 0.3492    ndcg : 1.0
+
+afeat_layer:6
+Valid result:
+auc : 0.8158    logloss : 0.3539    ndcg : 1.0
+Test result:
+auc : 0.8165    logloss : 0.3544    ndcg : 1.0
+
+afeat_layer:2
+Valid result:
+auc : 0.8128    logloss : 0.3504    ndcg : 1.0
+Test result:
+auc : 0.8137    logloss : 0.3509    ndcg : 1.0
+
+afeat_layer:1
+Valid result:
+auc : 0.8119    logloss : 0.3503    ndcg : 1.0
+Test result:
+auc : 0.8125    logloss : 0.3509    ndcg : 1.0
+
+afeat_layer:9
+Valid result:
+auc : 0.7961    logloss : 0.3702    ndcg : 1.0
+Test result:
+auc : 0.7973    logloss : 0.3705    ndcg : 1.0
+
+afeat_layer:3
+Valid result:
+auc : 0.8121    logloss : 0.3544    ndcg : 1.0
+Test result:
+auc : 0.8129    logloss : 0.3548    ndcg : 1.0
+
+afeat_layer:11
+Valid result:
+auc : 0.8129    logloss : 0.3509    ndcg : 0.9149
+Test result:
+auc : 0.8134    logloss : 0.3515    ndcg : 1.0
+
+afeat_layer:8
+Valid result:
+auc : 0.8136    logloss : 0.3503    ndcg : 0.9364
+Test result:
+auc : 0.8145    logloss : 0.3506    ndcg : 1.0
+
+afeat_layer:10
+Valid result:
+auc : 0.813    logloss : 0.3516    ndcg : 1.0
+Test result:
+auc : 0.8137    logloss : 0.352    ndcg : 1.0
+
+afeat_layer:7
+Valid result:
+auc : 0.8137    logloss : 0.3505    ndcg : 1.0
+Test result:
+auc : 0.8146    logloss : 0.3509    ndcg : 1.0
+
+afeat_layer:4
+Valid result:
+auc : 0.8121    logloss : 0.3501    ndcg : 1.0
+Test result:
+auc : 0.8129    logloss : 0.3504    ndcg : 1.0
 

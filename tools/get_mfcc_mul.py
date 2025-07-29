@@ -44,8 +44,8 @@ def traverse_and_extract_features(folder_paths, output_path, threshold_sec, num_
         list(tqdm(pool.imap(process_file, tasks), total=len(tasks)))
 
 # 配置参数
-folder_paths = ['/user/zhouyz/rec/recbole_v2/dataset/music4all/music4all/audios']
-output_path = '/user/zhouyz/rec/recbole_v2/dataset/music4all/music4all/mfcc-mean'
+folder_paths = ['/home/zhangyk/zhouyz/rec/music/rec/MSD']
+output_path = '/home/zhangyk/zhouyz/rec/music/rec/MSD-mfcc'
 threshold_sec = 360.0
 num_processes = 4  # 设置进程数
 

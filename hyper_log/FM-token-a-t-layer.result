@@ -1,0 +1,83 @@
+afeat_layer:8
+Valid result:
+auc : 0.8524    logloss : 0.4188    ndcg : 0.9306
+Test result:
+auc : 0.8533    logloss : 0.4176    ndcg : 0.7511
+
+afeat_layer:7
+Valid result:
+auc : 0.8518    logloss : 0.4199    ndcg : 0.9216
+Test result:
+auc : 0.8525    logloss : 0.419    ndcg : 0.9216
+
+afeat_layer:5
+Valid result:
+auc : 0.8523    logloss : 0.4161    ndcg : 0.8166
+Test result:
+auc : 0.8533    logloss : 0.4149    ndcg : 1.0
+
+afeat_layer:3
+Valid result:
+auc : 0.8526    logloss : 0.4161    ndcg : 0.9364
+Test result:
+auc : 0.8534    logloss : 0.415    ndcg : 1.0
+
+afeat_layer:4
+Valid result:
+auc : 0.8526    logloss : 0.4158    ndcg : 0.9216
+Test result:
+auc : 0.8534    logloss : 0.415    ndcg : 0.9052
+
+afeat_layer:2
+Valid result:
+auc : 0.8525    logloss : 0.4157    ndcg : 1.0
+Test result:
+auc : 0.8532    logloss : 0.4149    ndcg : 0.7663
+
+afeat_layer:mean
+Valid result:
+auc : 0.8527    logloss : 0.4158    ndcg : 0.89
+Test result:
+auc : 0.8534    logloss : 0.415    ndcg : 1.0
+
+afeat_layer:11
+Valid result:
+auc : 0.8529    logloss : 0.4153    ndcg : 1.0
+Test result:
+auc : 0.8538    logloss : 0.4142    ndcg : 0.7917
+
+afeat_layer:0
+Valid result:
+auc : 0.8518    logloss : 0.4163    ndcg : 0.89
+Test result:
+auc : 0.8527    logloss : 0.4153    ndcg : 0.9306
+
+afeat_layer:9
+Valid result:
+auc : 0.8515    logloss : 0.4164    ndcg : 0.9306
+Test result:
+auc : 0.8523    logloss : 0.4154    ndcg : 1.0
+
+afeat_layer:6
+Valid result:
+auc : 0.8525    logloss : 0.4157    ndcg : 1.0
+Test result:
+auc : 0.8535    logloss : 0.4146    ndcg : 1.0
+
+afeat_layer:10
+Valid result:
+auc : 0.8513    logloss : 0.4168    ndcg : 1.0
+Test result:
+auc : 0.8521    logloss : 0.4159    ndcg : 0.8512
+
+afeat_layer:1
+Valid result:
+auc : 0.8524    logloss : 0.4159    ndcg : 1.0
+Test result:
+auc : 0.8531    logloss : 0.4149    ndcg : 0.9266
+
+
+
+best params: {'afeat_layer': 11}
+best result: 
+{'model': 'FM', 'best_valid_score': np.float64(0.8529), 'valid_score_bigger': True, 'best_valid_result': OrderedDict([('auc', np.float64(0.8529)), ('logloss', np.float64(0.4153)), ('ndcg', np.float64(1.0))]), 'test_result': OrderedDict([('auc', np.float64(0.8538)), ('logloss', np.float64(0.4142)), ('ndcg', np.float64(0.7917))])}

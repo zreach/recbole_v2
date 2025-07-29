@@ -2,6 +2,7 @@
 
 # 定义要进行实验的模型列表
 models=("FM" "DSSM" "WideDeep" "NFM" "DeepFM" "AFM" "xDeepFM" "DCN" "DCNV2" "AutoInt" "MaskNet" "EulerNet" "FinalMLP" "WuKong")
+
 # 定义可用的GPU ID列表
 gpus=(0 1 2 3 4 5 6 7)
 num_gpus=${#gpus[@]}
@@ -13,11 +14,13 @@ for model in "${models[@]}"; do
     echo "Starting experiment for model: $model on GPU: $gpu_id"
     
     # 在后台运行实验
-    CUDA_VISIBLE_DEVICES=$gpu_id python run_recbole.py \
+    CUDA_VISIBLE_DEVICES=$gpu_id python run_hyper.py \
         --dataset=lfm2b-fil \
-        --config_files=configs/lfm2b-fil/token.yaml \
+        --config_files="configs/lfm2b-fil/token.yaml configs/lfm2b-fil/audio.yaml configs/lfm2b-fil/text.yaml" \
         --model=$model \
-        --task_name=token &
+        --epochs=10 \
+        --output_file=hyper_log/$model-token-a-t-layer.result \
+        --params_file=hyper-layer.test &
     
     model_idx=$((model_idx + 1))
 done

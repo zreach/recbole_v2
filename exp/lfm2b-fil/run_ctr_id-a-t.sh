@@ -15,9 +15,9 @@ for model in "${models[@]}"; do
     # 在后台运行实验
     CUDA_VISIBLE_DEVICES=$gpu_id python run_recbole.py \
         --dataset=lfm2b-fil \
-        --config_files=configs/lfm2b-fil/token.yaml \
+        --config_files="configs/lfm2b-fil/idonly.yaml configs/lfm2b-fil/audio.yaml configs/lfm2b-fil/text.yaml" \
         --model=$model \
-        --task_name=token &
+        --task_name=id-a-t &
     
     model_idx=$((model_idx + 1))
 done

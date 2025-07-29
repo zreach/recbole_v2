@@ -40,6 +40,11 @@ def hyperopt_tune(args):
     hp.export_result(output_file=args.output_file)
     print("best params: ", hp.best_params)
     print("best result: ")
+    with open(args.output_file, "a", encoding="utf-8") as f:
+        f.write("\n\n")
+        f.write(f"best params: {hp.best_params}\n")
+        f.write("best result: \n")
+        f.write(f"{hp.params2result[hp.params2str(hp.best_params)]}\n")
     print(hp.params2result[hp.params2str(hp.best_params)])
 
 

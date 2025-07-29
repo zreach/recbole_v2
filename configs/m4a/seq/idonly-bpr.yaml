@@ -31,16 +31,19 @@ eval_step: 1 #每次训练后做evalaution的次数
 stopping_step: 10 #控制训练收敛的步骤数，在该步骤数内若选取的评测标准没有什么变化，就可以提前停止了
 # embedding_size: 10
 
-neg_my: true
-train_neg_sample_args: ~
+# neg_my: true
+training_neg_sample_num: 1
+# train_neg_sample_args: ~
+state: debug
+loss_type: BPR #损失函数类型
     # distribution: "uniform"
     # sample_num: 1
 
 eval_args:
-    mode:
-        valid: my_uni
-        test: my_uni
-    order: TO
+  split: {'LS': 'valid_and_test'}
+  order: TO
+  mode: full
+
 # user_inter_num_interval: [50,10000]
 # item_inter_num_interval: [50,10000]
 # numerical_features: [age, playcount] #不加这个float特征不会被计算
