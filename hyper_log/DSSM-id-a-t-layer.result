@@ -1,0 +1,65 @@
+afeat_layer:4
+Valid result:
+auc : 0.7112    logloss : 0.4628    ndcg : 0.9149
+Test result:
+auc : 0.714    logloss : 0.4635    ndcg : 0.9364
+
+afeat_layer:5
+Valid result:
+auc : 0.7112    logloss : 0.4628    ndcg : 0.9149
+Test result:
+auc : 0.714    logloss : 0.4635    ndcg : 0.9364
+
+afeat_layer:9
+Valid result:
+auc : 0.7112    logloss : 0.4628    ndcg : 0.9149
+Test result:
+auc : 0.714    logloss : 0.4635    ndcg : 0.9364
+
+afeat_layer:6
+Valid result:
+auc : 0.7112    logloss : 0.4628    ndcg : 0.9149
+Test result:
+auc : 0.714    logloss : 0.4635    ndcg : 0.9364
+
+afeat_layer:0
+Valid result:
+auc : 0.7112    logloss : 0.4628    ndcg : 0.9149
+Test result:
+auc : 0.714    logloss : 0.4635    ndcg : 0.9364
+
+afeat_layer:11
+Valid result:
+auc : 0.7112    logloss : 0.4628    ndcg : 0.9149
+Test result:
+auc : 0.714    logloss : 0.4635    ndcg : 0.9364
+
+afeat_layer:3
+Valid result:
+auc : 0.7112    logloss : 0.4628    ndcg : 0.9149
+Test result:
+auc : 0.714    logloss : 0.4635    ndcg : 0.9364
+
+afeat_layer:10
+Valid result:
+auc : 0.7112    logloss : 0.4628    ndcg : 0.9149
+Test result:
+auc : 0.714    logloss : 0.4635    ndcg : 0.9364
+
+afeat_layer:2
+Valid result:
+auc : 0.7112    logloss : 0.4628    ndcg : 0.9149
+Test result:
+auc : 0.714    logloss : 0.4635    ndcg : 0.9364
+
+afeat_layer:8
+Valid result:
+auc : 0.7112    logloss : 0.4628    ndcg : 0.9149
+Test result:
+auc : 0.714    logloss : 0.4635    ndcg : 0.9364
+
+
+
+best params: {'afeat_layer': 4}
+best result: 
+{'model': 'DSSM', 'best_valid_score': np.float64(0.7112), 'valid_score_bigger': True, 'best_valid_result': OrderedDict([('auc', np.float64(0.7112)), ('logloss', np.float64(0.4628)), ('ndcg', np.float64(0.9149))]), 'test_result': OrderedDict([('auc', np.float64(0.714)), ('logloss', np.float64(0.4635)), ('ndcg', np.float64(0.9364))])}

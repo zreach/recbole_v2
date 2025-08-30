@@ -1,1 +1,4 @@
-embedding_size: 10              # (int) The embedding size of features.
+embedding_size: 40              # (int) The embedding size of features.
+text_firstorder_sizes: [64,]
+audio_firstorder_sizes: [64,]
+use_firstorder_mlp: True

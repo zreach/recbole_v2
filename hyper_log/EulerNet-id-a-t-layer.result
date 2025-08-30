@@ -1,0 +1,65 @@
+afeat_layer:9
+Valid result:
+auc : 0.8167    logloss : 0.3527    ndcg : 1.0
+Test result:
+auc : 0.8164    logloss : 0.354    ndcg : 1.0
+
+afeat_layer:1
+Valid result:
+auc : 0.8155    logloss : 0.3533    ndcg : 1.0
+Test result:
+auc : 0.8158    logloss : 0.3543    ndcg : 1.0
+
+afeat_layer:0
+Valid result:
+auc : 0.816    logloss : 0.3529    ndcg : 1.0
+Test result:
+auc : 0.8158    logloss : 0.3542    ndcg : 1.0
+
+afeat_layer:10
+Valid result:
+auc : 0.816    logloss : 0.3529    ndcg : 1.0
+Test result:
+auc : 0.8163    logloss : 0.3538    ndcg : 1.0
+
+afeat_layer:6
+Valid result:
+auc : 0.8155    logloss : 0.3519    ndcg : 1.0
+Test result:
+auc : 0.8156    logloss : 0.3531    ndcg : 1.0
+
+afeat_layer:3
+Valid result:
+auc : 0.8154    logloss : 0.3545    ndcg : 1.0
+Test result:
+auc : 0.8155    logloss : 0.3554    ndcg : 1.0
+
+afeat_layer:4
+Valid result:
+auc : 0.8158    logloss : 0.3542    ndcg : 1.0
+Test result:
+auc : 0.8154    logloss : 0.3556    ndcg : 1.0
+
+afeat_layer:2
+Valid result:
+auc : 0.8144    logloss : 0.3482    ndcg : 1.0
+Test result:
+auc : 0.815    logloss : 0.3487    ndcg : 1.0
+
+afeat_layer:7
+Valid result:
+auc : 0.8155    logloss : 0.3529    ndcg : 1.0
+Test result:
+auc : 0.8157    logloss : 0.3539    ndcg : 1.0
+
+afeat_layer:mean
+Valid result:
+auc : 0.8155    logloss : 0.3479    ndcg : 1.0
+Test result:
+auc : 0.8166    logloss : 0.3483    ndcg : 1.0
+
+
+
+best params: {'afeat_layer': 9}
+best result: 
+{'model': 'EulerNet', 'best_valid_score': np.float64(0.8167), 'valid_score_bigger': True, 'best_valid_result': OrderedDict([('auc', np.float64(0.8167)), ('logloss', np.float64(0.3527)), ('ndcg', np.float64(1.0))]), 'test_result': OrderedDict([('auc', np.float64(0.8164)), ('logloss', np.float64(0.354)), ('ndcg', np.float64(1.0))])}

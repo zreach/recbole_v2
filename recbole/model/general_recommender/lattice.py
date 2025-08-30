@@ -62,37 +62,78 @@ class LATTICE(GeneralRecommender):
         text_adj_file = os.path.join(dataset_path, 'text_adj_{}.pt'.format(self.knn_k))
 
         if self.a_feats is not None:
-            self.audio_embedding = self.a_feats
+            # self.audio_embedding = self.a_feats
             if os.path.exists(audio_adj_file):
                 audio_adj = torch.load(audio_adj_file)
             else:
-                audio_adj = build_sim(self.id2afeats.weight.detach())
-                audio_adj = build_knn_neighbourhood(audio_adj, topk=self.knn_k)
-                audio_adj = compute_normalized_laplacian(audio_adj)
+                # audio_adj = build_sim(self.id2afeats.weight.detach())
+                # audio_adj = build_knn_neighbourhood(audio_adj, topk=self.knn_k)
+                # audio_adj = compute_normalized_laplacian(audio_adj)
+                indices, audio_adj = self.get_knn_adj_mat(self.id2afeats.weight.detach())
                 torch.save(audio_adj, audio_adj_file)
-            self.audio_original_adj = audio_adj.cuda()
+            self.audio_original_adj = audio_adj
 
         if self.t_feats is not None:
-            self.text_embedding = nn.Embedding.from_pretrained(self.t_feats, freeze=False)
+            # self.text_embedding = nn.Embedding.from_pretrained(self.t_feats, freeze=False)
             if os.path.exists(text_adj_file):
                 text_adj = torch.load(text_adj_file)
             else:
-                text_adj = build_sim(self.text_embedding.weight.detach())
-                text_adj = build_knn_neighbourhood(text_adj, topk=self.knn_k)
-                text_adj = compute_normalized_laplacian(text_adj)
+                # text_adj = build_sim(self.text_embedding.weight.detach())
+                # text_adj = build_knn_neighbourhood(text_adj, topk=self.knn_k)
+                # text_adj = compute_normalized_laplacian(text_adj)
+                indices, text_adj = self.get_knn_adj_mat(self.id2tfeats.weight.detach())
                 torch.save(text_adj, text_adj_file)
-            self.text_original_adj = text_adj.cuda()
+            self.text_original_adj = text_adj
 
         if self.a_feats is not None:
             self.audio_trs = nn.Linear(self.a_feats.shape[1], self.feat_embed_dim)
-        # if self.t_feats is not None:
-        #     self.text_trs = nn.Linear(self.t_feats.shape[1], self.feat_embed_dim)
+        if self.t_feats is not None:
+            self.text_trs = nn.Linear(self.t_feats.shape[1], self.feat_embed_dim)
 
         self.modal_weight = nn.Parameter(torch.Tensor([0.5, 0.5]))
         self.softmax = nn.Softmax(dim=0)
     
     def pre_epoch_processing(self):
         self.build_item_graph = True
+    
+    def get_knn_adj_mat(self, mm_embeddings):
+        context_norm = mm_embeddings.div(torch.norm(mm_embeddings, p=2, dim=-1, keepdim=True))
+        
+        # 方案1：分批计算相似度矩阵，避免一次性计算完整的相似度矩阵
+        batch_size = 5000  # 可以根据显存大小调整
+        n_items = context_norm.size(0)
+        knn_ind_list = []
+        
+        for i in range(0, n_items, batch_size):
+            end_idx = min(i + batch_size, n_items)
+            batch_context = context_norm[i:end_idx]
+            
+            # 只计算当前batch与所有items的相似度
+            batch_sim = torch.mm(batch_context, context_norm.transpose(1, 0))
+            _, batch_knn_ind = torch.topk(batch_sim, self.knn_k, dim=-1)
+            knn_ind_list.append(batch_knn_ind)
+            
+            del batch_sim  # 立即释放显存
+        
+        knn_ind = torch.cat(knn_ind_list, dim=0)
+        adj_size = (n_items, n_items)
+        
+        # construct sparse adj
+        indices0 = torch.arange(knn_ind.shape[0]).to(self.device)
+        indices0 = torch.unsqueeze(indices0, 1)
+        indices0 = indices0.expand(-1, self.knn_k)
+        indices = torch.stack((torch.flatten(indices0), torch.flatten(knn_ind)), 0)
+        # norm
+        return indices, self.compute_normalized_laplacian(indices, adj_size)
+
+    def compute_normalized_laplacian(self, indices, adj_size):
+        adj = torch.sparse.FloatTensor(indices, torch.ones_like(indices[0]), adj_size)
+        row_sum = 1e-7 + torch.sparse.sum(adj, -1).to_dense()
+        r_inv_sqrt = torch.pow(row_sum, -0.5)
+        rows_inv_sqrt = r_inv_sqrt[indices[0]]
+        cols_inv_sqrt = r_inv_sqrt[indices[1]]
+        values = rows_inv_sqrt * cols_inv_sqrt
+        return torch.sparse.FloatTensor(indices, values, adj_size)
     
     def get_adj_mat(self):
         adj_mat = sp.dok_matrix((self.n_users + self.n_items, self.n_users + self.n_items), dtype=np.float32)
@@ -130,6 +171,9 @@ class LATTICE(GeneralRecommender):
         if self.a_feats is not None:
             audio_feats = self.audio_trs(self.id2afeats.weight)
         
+        if self.t_feats is not None:
+            text_feats = self.text_trs(self.id2tfeats.weight)
+        
         if build_item_graph:
             weight = self.softmax(self.modal_weight)
 
@@ -138,10 +182,16 @@ class LATTICE(GeneralRecommender):
                 self.audio_adj = build_knn_neighbourhood(self.audio_adj, topk=self.knn_k)
                 learned_adj = self.audio_adj
                 original_adj = self.audio_original_adj
+            
+            if self.t_feats is not None:
+                self.text_adj = build_sim(text_feats)
+                self.text_adj = build_knn_neighbourhood(self.text_adj, topk=self.knn_k)
+                learned_adj = self.text_adj
+                original_adj = self.text_original_adj
 
-            # if self.a_feats is not None and self.t_feats is not None:
-            #     learned_adj = weight[0] * self.audio_adj + weight[1] * self.text_adj
-            #     original_adj = weight[0] * self.audio_original_adj + weight[1] * self.text_original_adj
+            if self.a_feats is not None and self.t_feats is not None:
+                learned_adj = weight[0] * self.audio_adj + weight[1] * self.text_adj
+                original_adj = weight[0] * self.audio_original_adj + weight[1] * self.text_original_adj
 
             learned_adj = compute_normalized_laplacian(learned_adj)
             if self.item_adj is not None:

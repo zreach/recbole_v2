@@ -564,7 +564,7 @@ class Trainer(AbstractTrainer):
 
     @torch.no_grad()
     def evaluate(
-        self, eval_data, load_best_model=True, model_file=None, show_progress=False
+        self, eval_data, load_best_model=True, model_file=None, show_progress=False, flag=None
     ):
         r"""Evaluate the model based on the eval data.
 
@@ -627,7 +627,7 @@ class Trainer(AbstractTrainer):
             )
         self.eval_collector.model_collect(self.model)
         struct = self.eval_collector.get_data_struct()
-        result = self.evaluator.evaluate(struct)
+        result = self.evaluator.evaluate(struct, flag=flag)
         if not self.config["single_spec"]:
             result = self._map_reduce(result, num_sample)
         self.wandblogger.log_eval_metrics(result, head="eval")

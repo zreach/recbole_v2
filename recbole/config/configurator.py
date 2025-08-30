@@ -555,6 +555,8 @@ class Config(object):
             eval_neg_sample_args = {"distribution": "popularity", "sample_num": 1}
         elif eval_mode == "my_uni":
             eval_neg_sample_args = {"distribution": "uniform", "sample_num": 1}
+        elif eval_mode == "my_uni100":
+            eval_neg_sample_args = {"distribution": "uniform", "sample_num": 100}
         elif eval_mode == "full":
             eval_neg_sample_args = {"distribution": "uniform", "sample_num": "none"}
         elif eval_mode[0:3] == "uni":

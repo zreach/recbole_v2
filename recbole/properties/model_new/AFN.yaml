@@ -1,4 +1,4 @@
-embedding_size: 32                # (int) The embedding size of features.
+embedding_size: 10                # (int) The embedding size of features.
 mlp_hidden_size: [128, 64]  # (list of int) The hidden size of MLP layers.  
 dropout_prob: 0.1                 # (float) The dropout rate.
 ensemble_dnn: False

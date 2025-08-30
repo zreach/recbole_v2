@@ -18,18 +18,18 @@ load_col:
     user: [user_id, gender, country, age]
     item: [tracks_id]
 
-numerical_features: [age] #不加这个float特征不会被计算
-discretization:
-    age:
-        method: LD
-        bucket: 10
+# numerical_features: [age] #不加这个float特征不会被计算
+# discretization:
+#     age:
+#         method: LD
+#         bucket: 10
     
 
 user_inter_num_interval: [5,1000000]
 item_inter_num_interval: [5,1000000] 
 
 # training settings
-epochs: 10 #训练的最大轮数
+epochs: 50 #训练的最大轮数
 # train_batch_size: 64 #训练的batch_size
 learner: adam #使用的pytorch内置优化器
 learning_rate: 0.005 #学习率

@@ -1,0 +1,65 @@
+afeat_layer:8
+Valid result:
+auc : 0.8229    logloss : 0.353    ndcg : 1.0
+Test result:
+auc : 0.8236    logloss : 0.3533    ndcg : 1.0
+
+afeat_layer:6
+Valid result:
+auc : 0.8191    logloss : 0.3497    ndcg : 1.0
+Test result:
+auc : 0.8195    logloss : 0.3504    ndcg : 1.0
+
+afeat_layer:9
+Valid result:
+auc : 0.8199    logloss : 0.3535    ndcg : 1.0
+Test result:
+auc : 0.8197    logloss : 0.3549    ndcg : 1.0
+
+afeat_layer:3
+Valid result:
+auc : 0.8172    logloss : 0.3477    ndcg : 1.0
+Test result:
+auc : 0.8173    logloss : 0.3487    ndcg : 1.0
+
+afeat_layer:7
+Valid result:
+auc : 0.818    logloss : 0.3533    ndcg : 0.9364
+Test result:
+auc : 0.8176    logloss : 0.3545    ndcg : 1.0
+
+afeat_layer:2
+Valid result:
+auc : 0.8171    logloss : 0.347    ndcg : 1.0
+Test result:
+auc : 0.8176    logloss : 0.3475    ndcg : 1.0
+
+afeat_layer:0
+Valid result:
+auc : 0.817    logloss : 0.3478    ndcg : 1.0
+Test result:
+auc : 0.8173    logloss : 0.3484    ndcg : 1.0
+
+afeat_layer:1
+Valid result:
+auc : 0.8194    logloss : 0.3691    ndcg : 1.0
+Test result:
+auc : 0.8189    logloss : 0.3708    ndcg : 1.0
+
+afeat_layer:10
+Valid result:
+auc : 0.8205    logloss : 0.3551    ndcg : 1.0
+Test result:
+auc : 0.8206    logloss : 0.3559    ndcg : 1.0
+
+afeat_layer:11
+Valid result:
+auc : 0.8195    logloss : 0.3547    ndcg : 1.0
+Test result:
+auc : 0.8197    logloss : 0.3553    ndcg : 1.0
+
+
+
+best params: {'afeat_layer': 8}
+best result: 
+{'model': 'DCNV2', 'best_valid_score': np.float64(0.8229), 'valid_score_bigger': True, 'best_valid_result': OrderedDict([('auc', np.float64(0.8229)), ('logloss', np.float64(0.353)), ('ndcg', np.float64(1.0))]), 'test_result': OrderedDict([('auc', np.float64(0.8236)), ('logloss', np.float64(0.3533)), ('ndcg', np.float64(1.0))])}

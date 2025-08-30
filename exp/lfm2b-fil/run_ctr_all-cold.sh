@@ -1,8 +1,9 @@
-models=("FM" "DSSM" "WideDeep" "NFM" "DeepFM" "AFM" "xDeepFM" "DCN" "DCNV2" "AutoInt" "MaskNet" "EulerNet" "WuKong" "FinalMLP")
+#!/bin/bash
 
+# 定义要进行实验的模型列表
+models=("LR" "FM" "DeepFM" "AFM" "DCN" "DCNV2" "AutoInt" "MaskNet" "EulerNet" "FinalMLP")
 # 定义可用的GPU ID列表
-# gpus=(0 1 2 3)
-gpus=(4 5 6 7)
+gpus=(0 1 2 3 4 5 6 7)
 num_gpus=${#gpus[@]}
 model_idx=0
 
@@ -13,10 +14,10 @@ for model in "${models[@]}"; do
     
     # 在后台运行实验
     CUDA_VISIBLE_DEVICES=$gpu_id python run_recbole.py \
-        --dataset=m4a \
-        --config_files="configs/m4a/all.yaml configs/m4a/text.yaml configs/m4a/cluster.yaml" \
+        --dataset=lfm2b-fil \
+        --config_files="configs/lfm2b-fil/all.yaml configs/settings/cold.yaml"\
         --model=$model \
-        --task_name=all-t-cluster &
+        --task_name=all-cold &
     
     model_idx=$((model_idx + 1))
 done

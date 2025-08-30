@@ -18,10 +18,11 @@ import numpy as np
 import torch
 import torch.nn as nn
 import pickle
+import os
+from sklearn.cluster import KMeans
 
-from recbole.model.layers import FMEmbedding, FMFirstOrderLinear, FLEmbedding
+from recbole.model.layers_v2 import FMEmbedding, FMFirstOrderLinear, FLEmbedding, MLPLayers
 from recbole.utils import ModelType, InputType, FeatureSource, FeatureType, set_color
-from recbole.model.layers import MLPLayers
 from recbole.model.loss import RegLoss
 
 class AbstractRecommender(nn.Module):
@@ -141,9 +142,13 @@ class GeneralRecommender(AbstractRecommender):
 
         self.a_feats = None 
         self.t_feats = None
+        self.id2afeats = None 
+        self.id2tfeats = None
+
 
         if self.use_cb:
-            
+            if self.use_sem_id:
+                pass
             if self.use_audio:
                 a_feature_path = config['a_feature_path']
                 with open(a_feature_path, 'rb') as fp:
@@ -168,7 +173,7 @@ class GeneralRecommender(AbstractRecommender):
             #         norm[norm == 0] = 1e-12
             #         music_features_array[k] = v / norm
 
-            if config['dataset'] in ['lfm1b-fil', 'm4a-fil']:
+            if config['dataset'] in [ 'm4a-fil']:
                 
                 map_path = config['map_path']
                 with open(map_path, 'rb') as fp:
@@ -200,7 +205,7 @@ class GeneralRecommender(AbstractRecommender):
                         music_features[v] = torch.Tensor(wav_feature)
                     if self.use_text:
                         text_features[v] = torch.Tensor(text_feature)
-            elif config['dataset'] in ['m4a', 'lfm2b-fil']: # 这个数据没有时间维度， 而且不需要map
+            elif config['dataset'] in ['m4a', 'm4a-seq', 'lfm2b-fil', 'lfm1b-fil',]: # 这个数据没有时间维度， 而且不需要map
                 for k, v in self.token2id['tracks_id'].items():
                     k = str(k)
                     self.id2token[v] = k
@@ -374,6 +379,92 @@ class KnowledgeRecommender(AbstractRecommender):
         self.device = config["device"]
 
 
+class Aggregator(nn.Module):
+    def __init__(self, embedding_size, token2id, feature_dict, config, proj_method="linear", layer=-1, n_clusters=2, mlp_dropout=0.2, mlp_size_list=None):
+        super().__init__()
+        self.layer = layer
+        self.proj_method = proj_method
+        self.embedding_size = embedding_size
+        self.token2id = token2id
+        self.feature_dict = feature_dict
+        self.has_time = False
+        feature_shape = list(feature_dict.values())[0].shape
+        self.config = config
+
+
+        if len(feature_shape) == 1:
+            H = feature_shape
+            for k, v in feature_dict.items():
+                feature_dict[k] = v.reshape(1, 1, -1)
+            L = 1
+        elif len(feature_shape) == 2:
+            L, H = feature_shape
+            for k, v in feature_dict.items():
+                feature_dict[k] = v.reshape(L, 1, H)
+        elif len(feature_shape) == 3:
+            L, T, H = feature_shape
+            self.has_time = True
+        else:
+            raise ValueError(f"Feature dimension not supported: {len(feature_shape)}")
+        self.feature_size = H
+        if layer == 'weighted_mean':
+            self.weights = nn.Parameter(torch.ones((L, 1)), requires_grad=True)
+        
+        feature_token = torch.zeros((len(self.token2id['tracks_id']), H))
+        
+        # TODO 还有对时间的平均
+        for k, v in self.token2id['tracks_id'].items():
+            if k == '[PAD]':
+                feature = np.zeros((H))
+            else:
+                feature = feature_dict[k]
+                feature = np.mean(feature, axis=1, keepdims=False) # 对时间维度做平均
+                if layer == "mean":
+                    feature = np.mean(feature, axis=0, keepdims=False)
+                else:
+                    feature = feature[layer] # 取某层
+            feature_token[v] = torch.Tensor(feature)
+        self.id2feats = nn.Embedding.from_pretrained(feature_token)
+        self.id2feats.requires_grad_(False)
+        
+
+        # 线性聚合参数
+        if proj_method == 'linear':
+            self.net = nn.Linear(H, embedding_size, bias=True)
+        # MLP聚合参数
+        elif proj_method == 'mlp':
+            size_list = [
+                H
+            ] + mlp_size_list + [self.embedding_size]
+            self.net = MLPLayers(size_list, mlp_dropout)
+        # 聚类聚合参数
+        elif proj_method == 'cluster':
+            self.embedding_tables = []
+            keys = list(feature_dict.keys())
+            self.n_clusters = n_clusters
+            for l in range(L):
+                vectors = np.array(list(feature_dict.values()))[:, l, :]
+                kmeans = KMeans(n_clusters=n_clusters, random_state=42, n_init='auto')
+                labels = kmeans.labels_
+                clustered_results = {key: label for key, label in zip(keys, labels)}
+                self.embedding_tables.append(nn.Embedding(n_clusters, embedding_size))
+        elif proj_method == 'rq-kmeans':
+            from RQ import RQKMeans
+            keys = list(feature_dict.keys())
+            self.n_clusters = n_clusters
+        else:
+            raise ValueError(f"Unknown projection method: {proj_method}")
+
+    def forward(self, interaction):
+        if self.proj_method in ['linear', 'mlp']:
+            track_ids = interaction['tracks_id']
+            wav_features = self.id2feats(track_ids)
+            embed_features = self.net(wav_features)
+            return embed_features.unsqueeze(1)
+        else:
+            raise ValueError(f"Unknown aggregation method: {self.proj_method}")
+
+
 class ContextRecommender(AbstractRecommender):
     """This is a abstract context-aware recommender. All the context-aware model should implement this class.
     The base context-aware recommender class provide the basic embedding function of feature fields which also
@@ -432,27 +523,29 @@ class ContextRecommender(AbstractRecommender):
         
         self.token2id = dataset.field2token_id
         self.id2token = {}
-        # self.id2token = dataset.field2id_token
 
-        self.use_cb = config['use_cb']
-        # self.feature_type = config['wav_feature_type']
-        if self.use_cb is None:
-            self.use_cb = False
+        self.use_cb = config['use_cb'] if 'use_cb' in config else False
 
         self.use_audio = config['use_audio']
         self.use_text = config['use_text']
 
         if self.use_cb:
             
-
             if self.use_audio:
                 a_feature_path = config['a_feature_path']
                 with open(a_feature_path, 'rb') as fp:
                     music_features_array = pickle.load(fp)
                 
-                self.wav_embedding_size = list(music_features_array.values())[0].shape[-1]
-                music_features_array['[PAD]'] = np.zeros((self.wav_embedding_size))
-                music_features = torch.zeros((len(self.token2id['tracks_id']), self.wav_embedding_size ))
+                self.a_aggregator = Aggregator(
+                    embedding_size = self.embedding_size,
+                    proj_method = config['proj_method'],
+                    token2id = self.token2id,
+                    feature_dict = music_features_array,
+                    config=config,
+                    layer=config['afeat_layer'] if 'afeat_layer' in config else -1,
+                    mlp_dropout= config['wav_dropout'] if 'wav_dropout' in config else 0.2,
+                    mlp_size_list= config['wav_mlp_sizes'] if 'wav_mlp_sizes' in config else [512, 32],
+                )
 
             if self.use_text:
                 t_feature_path = config['t_feature_path']
@@ -463,69 +556,6 @@ class ContextRecommender(AbstractRecommender):
                 text_features_array['[PAD]'] = np.zeros((self.text_embedding_size))
                 text_features = torch.zeros((len(self.token2id['tracks_id']), self.text_embedding_size ))
             
-            
-            if config['dataset'] in ['lfm1b-fil', 'm4a-fil']:
-                map_path = config['map_path']
-                with open(map_path, 'rb') as fp:
-                    self.id2msd = pickle.load(fp)
-                self.id2msd = {str(k): v for k, v in self.id2msd.items()}
-                self.id2msd['[PAD]'] = '[PAD]'
-                for k, v in self.token2id['tracks_id'].items():
-                    # if config['dataset'] == 'm4a-fil':
-                    #     k = str(k)
-                    k = self.id2msd[k]
-                    self.id2token[v] = k
-                    if k == '[PAD]':
-                        if self.use_audio:
-                            wav_feature = np.zeros((self.wav_embedding_size))
-                        if self.use_text:
-                            text_feature = np.zeros((self.text_embedding_size))
-                    else:
-                        if self.use_text:
-                            text_feature = text_features_array[k]
-                        if self.use_audio:
-                            layer = config['afeat_layer']
-                            
-                            if layer is not None:
-                                wav_feature = music_features_array[k][layer]
-                            else:
-                                wav_feature = music_features_array[k]
-                    # print('layer', layer)
-                    if self.use_audio:
-                        music_features[v] = torch.Tensor(wav_feature)
-                    if self.use_text:
-                        text_features[v] = torch.Tensor(text_feature)
-            elif config['dataset'] in ['m4a', 'lfm2b-fil']: # 这个数据没有时间维度， 而且不需要map
-                for k, v in self.token2id['tracks_id'].items():
-                    self.id2token[v] = k
-                    if k == '[PAD]':
-                        if self.use_audio:
-                            wav_feature = np.zeros((self.wav_embedding_size))
-                        if self.use_text:
-                            text_feature = np.zeros((self.text_embedding_size))
-                    else:
-                        if self.use_text:
-                            text_feature = text_features_array[k]
-                        if self.use_audio:
-                            layer = config['afeat_layer']
-                            
-                            if layer is not None:
-                                if layer == 'mean':
-                                    wav_feature = np.mean(music_features_array[k], axis=0)
-                                else:
-                                    wav_feature = music_features_array[k][layer]
-                            else:
-                                wav_feature = music_features_array[k]
-                    # print('layer', layer)
-                    if self.use_audio:
-                        music_features[v] = torch.Tensor(wav_feature)
-                    if self.use_text:
-                        text_features[v] = torch.Tensor(text_feature)
-            # music_features = torch.load('/user/zhouyz/rec/myRec/wav2feature.pt')
-            if self.use_audio:
-                self.a_feats = music_features
-                self.id2afeats = nn.Embedding.from_pretrained(music_features)
-                self.id2afeats.requires_grad_(False)
 
             if self.use_text:
                 self.t_feats = text_features
@@ -612,40 +642,28 @@ class ContextRecommender(AbstractRecommender):
                 self.float_seq_embedding_table.append(
                     nn.Embedding(float_seq_field_dim, self.embedding_size)
                 )
-
-        self.first_order_linear = FMFirstOrderLinear(config, dataset)
-        
+        self.use_firstorder_mlp = config['use_firstorder_mlp']
+        if self.use_firstorder_mlp:
+            self.first_order_linear = FMFirstOrderLinear(config, dataset, id2afeats=self.id2afeats, id2tfeats=self.id2tfeats)
+        else:
+            self.first_order_linear = FMFirstOrderLinear(config, dataset)
         
         if self.use_audio:
-            size_list = [
-                self.wav_embedding_size 
-            ] + config['wav_mlp_sizes'] + [self.embedding_size]
-            self.wav_mlp = MLPLayers(size_list, 0.2)
+            # wav_dropout = config['wav_dropout'] if 'wav_dropout' in config else 0.2
+            # size_list = [
+            #     self.wav_embedding_size 
+            # ] + config['wav_mlp_sizes'] + [self.embedding_size]
+            # self.wav_mlp = MLPLayers(size_list, wav_dropout, last_activation = None)
             # self.wav_fc = nn.Linear(1024, self.embedding_size)
             self.num_feature_field += 1
         if self.use_text:
+            text_dropout = config['text_dropout'] if 'text_dropout' in config else 0.2
             size_list = [
                 self.text_embedding_size 
             ] + config['text_mlp_sizes'] + [self.embedding_size]
-            self.text_mlp = MLPLayers(size_list, 0.2)
+            self.text_mlp = MLPLayers(size_list, text_dropout, last_activation = None )
             # self.text_fc = nn.Linear(1024, self.embedding_size)
             self.num_feature_field += 1
-    
-    def get_music_features(self, track_ids):
-        # 返回Tensor的feature
-        # TODO : 利用并行加速
-        features = []
-        for id in track_ids:
-            try:
-                numpy_feature = self.music_features[id.item()]
-            except:
-                numpy_feature = np.zeros((1,self.wav_embedding_size))
-                # raise ValueError(f"Could not find {id}")
-                print(f"Could not find {id}")
-            features.append(torch.tensor(numpy_feature))
-        features_tensor = torch.stack(features)
-
-        return features_tensor.to(torch.float32).to(self.device)
 
     def reg_emb_loss(self):
         # 先默认是给embedding的正则化
@@ -877,7 +895,8 @@ class ContextRecommender(AbstractRecommender):
         sparse_embedding, dense_embedding = self.embed_input_fields(interaction)
         all_embeddings = []
         if self.use_audio:
-            wav_embedding = self.get_wav_embedding(interaction) 
+            # wav_embedding = self.get_wav_embedding(interaction) 
+            wav_embedding = self.a_aggregator(interaction)
             all_embeddings.append(wav_embedding)
         if self.use_text:
             text_embedding = self.get_text_embedding(interaction)

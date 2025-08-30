@@ -1,0 +1,7 @@
+# audio相关
+use_cb: true
+
+use_audio: true
+a_feature_path: "dataset/lfm2b-fil/lfm2b-mfcc.pkl"
+wav_mlp_sizes: [64]
+

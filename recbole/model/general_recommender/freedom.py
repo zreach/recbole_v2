@@ -71,12 +71,41 @@ class FREEDOM(GeneralRecommender):
                 del audio_adj
             torch.save(self.mm_adj, mm_adj_file)
 
+    # def get_knn_adj_mat(self, mm_embeddings):
+    #     context_norm = mm_embeddings.div(torch.norm(mm_embeddings, p=2, dim=-1, keepdim=True))
+    #     sim = torch.mm(context_norm, context_norm.transpose(1, 0))
+    #     _, knn_ind = torch.topk(sim, self.knn_k, dim=-1)
+    #     adj_size = sim.size()
+    #     del sim
+    #     # construct sparse adj
+    #     indices0 = torch.arange(knn_ind.shape[0]).to(self.device)
+    #     indices0 = torch.unsqueeze(indices0, 1)
+    #     indices0 = indices0.expand(-1, self.knn_k)
+    #     indices = torch.stack((torch.flatten(indices0), torch.flatten(knn_ind)), 0)
+    #     # norm
+    #     return indices, self.compute_normalized_laplacian(indices, adj_size)
     def get_knn_adj_mat(self, mm_embeddings):
         context_norm = mm_embeddings.div(torch.norm(mm_embeddings, p=2, dim=-1, keepdim=True))
-        sim = torch.mm(context_norm, context_norm.transpose(1, 0))
-        _, knn_ind = torch.topk(sim, self.knn_k, dim=-1)
-        adj_size = sim.size()
-        del sim
+        
+        # 方案1：分批计算相似度矩阵，避免一次性计算完整的相似度矩阵
+        batch_size = 5000  # 可以根据显存大小调整
+        n_items = context_norm.size(0)
+        knn_ind_list = []
+        
+        for i in range(0, n_items, batch_size):
+            end_idx = min(i + batch_size, n_items)
+            batch_context = context_norm[i:end_idx]
+            
+            # 只计算当前batch与所有items的相似度
+            batch_sim = torch.mm(batch_context, context_norm.transpose(1, 0))
+            _, batch_knn_ind = torch.topk(batch_sim, self.knn_k, dim=-1)
+            knn_ind_list.append(batch_knn_ind)
+            
+            del batch_sim  # 立即释放显存
+        
+        knn_ind = torch.cat(knn_ind_list, dim=0)
+        adj_size = (n_items, n_items)
+        
         # construct sparse adj
         indices0 = torch.arange(knn_ind.shape[0]).to(self.device)
         indices0 = torch.unsqueeze(indices0, 1)

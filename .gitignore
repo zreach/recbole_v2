@@ -15,4 +15,5 @@ wandb/*
 /ray_log*
 
 dataset/
+pics/
 

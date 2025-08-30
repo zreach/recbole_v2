@@ -1,0 +1,4 @@
+use_cb: true
+use_text: true
+t_feature_path: "dataset/lfm1b-fil/lfm1b-mulan-text.pkl"
+text_mlp_sizes: [256, 32]

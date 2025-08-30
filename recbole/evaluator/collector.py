@@ -50,6 +50,24 @@ class DataStruct(object):
             self._data_dict[name] = torch.cat(
                 (self._data_dict[name], value.clone().detach()), dim=0
             )
+    # def update_tensor(self, name: str, value: torch.Tensor):
+    #     if name not in self._data_dict:
+    #         self._data_dict[name] = value.clone().detach()
+    #     else:
+    #         if not isinstance(self._data_dict[name], torch.Tensor):
+    #             raise ValueError("{} is not a tensor.".format(name))
+            
+    #         # 确保两个张量在同一设备上
+    #         existing_tensor = self._data_dict[name]
+    #         new_value = value.clone().detach()
+            
+    #         # 如果设备不同，将新张量移到已存在张量的设备上
+    #         if existing_tensor.device != new_value.device:
+    #             new_value = new_value.to(existing_tensor.device)
+            
+    #         self._data_dict[name] = torch.cat(
+    #             (existing_tensor, new_value), dim=0
+    #         )
 
     def __str__(self):
         data_info = "\nContaining:\n"
@@ -197,6 +215,21 @@ class Collector(object):
                 "data.label", interaction[self.label_field].to(self.device)
             )
 
+        if self.register.need("data.items"):
+            # interaction is a Interaction object, which is a subclass of torch.Tensor
+            # so we can directly use it as a tensor
+            self.data_struct.update_tensor(
+                "data.items", interaction[self.config["ITEM_ID_FIELD"]].to(self.device)
+            )
+        if self.register.need("data.users"):
+            # interaction is a Interaction object, which is a subclass of torch.Tensor
+            # so we can directly use it as a tensor
+            self.data_struct.update_tensor(
+                "data.users", interaction[self.config["USER_ID_FIELD"]].to(self.device)
+            )
+        
+
+
     def model_collect(self, model: torch.nn.Module):
         """Collect the evaluation resource from model.
         Args:
@@ -218,6 +251,8 @@ class Collector(object):
         if self.register.need("data.label"):
             self.label_field = self.config["LABEL_FIELD"]
             self.data_struct.update_tensor("data.label", data_label.to(self.device))
+        
+        
 
     def get_data_struct(self):
         """Get all the evaluation resource that been collected.
@@ -226,7 +261,7 @@ class Collector(object):
         for key in self.data_struct._data_dict:
             self.data_struct._data_dict[key] = self.data_struct._data_dict[key].cpu()
         returned_struct = copy.deepcopy(self.data_struct)
-        for key in ["rec.topk", "rec.meanrank", "rec.score", "rec.items", "data.label"]:
+        for key in ["rec.topk", "rec.meanrank", "rec.score", "rec.items", "data.label", "data.items","data.users"]:
             if key in self.data_struct:
                 del self.data_struct[key]
         return returned_struct

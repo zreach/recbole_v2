@@ -1,10 +1,10 @@
 #!/bin/bash
 
 # 定义要进行实验的模型列表
-models=("FM" "DSSM" "WideDeep" "NFM" "DeepFM" "AFM" "xDeepFM" "DCN" "DCNV2" "AutoInt" "MaskNet" "EulerNet")
+models=("FM" "DSSM" "WideDeep" "NFM" "DeepFM" "AFM" "xDeepFM" "DCN" "DCNV2" "AutoInt" "MaskNet" "EulerNet" "FinalMLP" "WuKong")
 
 # 定义可用的GPU ID列表
-gpus=(0 1 2 3)
+gpus=(0 1 2 3 4 5 6 7)
 num_gpus=${#gpus[@]}
 model_idx=0
 
@@ -18,7 +18,7 @@ for model in "${models[@]}"; do
         --dataset=m4a \
         --config_files="configs/m4a/idonly.yaml configs/m4a/mulan.yaml configs/m4a/text.yaml" \
         --model=$model \
-        --task_name=id-a-t &
+        --task_name=id-mulan-t &
     
     model_idx=$((model_idx + 1))
 done

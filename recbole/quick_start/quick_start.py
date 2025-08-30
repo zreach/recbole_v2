@@ -156,7 +156,7 @@ def run_recbole(
 
     # model evaluation
     test_result = trainer.evaluate(
-        test_data, load_best_model=saved, show_progress=config["show_progress"]
+        test_data, load_best_model=saved, show_progress=config["show_progress"], flag="test"
     )
 
     environment_tb = get_environment(config)

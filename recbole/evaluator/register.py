@@ -73,6 +73,7 @@ class Register(object):
 
     def __init__(self, config):
         self.config = config
+        
         self.metrics = [metric.lower() for metric in self.config["metrics"]]
         self._build_register()
 

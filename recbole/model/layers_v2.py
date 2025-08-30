@@ -1361,7 +1361,7 @@ class FMFirstOrderLinear(nn.Module):
 
     """
 
-    def __init__(self, config, dataset, output_dim=1):
+    def __init__(self, config, dataset, output_dim=1, id2afeats=None, id2tfeats=None):
         super(FMFirstOrderLinear, self).__init__()
         if config['no_itemid'] is True:
             self.field_names = dataset.fields(
@@ -1386,6 +1386,35 @@ class FMFirstOrderLinear(nn.Module):
         self.LABEL = config["LABEL_FIELD"]
         self.device = config["device"]
         self.numerical_features = config["numerical_features"]
+
+        self.use_audio = False
+        self.use_text = False
+        if id2afeats is not None:
+            self.audio_firstorder_sizes = list(config["audio_firstorder_sizes"])
+            self.use_audio = True
+            self.id2afeats = id2afeats
+            self.audio_dim = id2afeats.weight.shape[1]
+            size_list = [
+                self.audio_dim
+            ] + self.audio_firstorder_sizes + [output_dim]
+            self.wav_mlp = MLPLayers(size_list, 0.2, last_activation=None)
+            # self.wav_linear = nn.Linear(
+            #     self.audio_dim, output_dim, bias=False
+            # ).to(self.device)
+        
+        if id2tfeats is not None:
+            self.use_text = True
+            self.id2tfeats = id2tfeats
+            self.text_firstorder_sizes = list(config["text_firstorder_sizes"])
+            self.text_dim = id2tfeats.weight.shape[1]
+            size_list = [
+                self.text_dim
+            ] + self.text_firstorder_sizes + [output_dim]
+            self.text_mlp = MLPLayers(size_list, 0.2, last_activation=None)
+            # self.text_linear = nn.Linear(
+            #     self.text_dim, output_dim, bias=False
+            # ).to(self.device)
+
         self.token_field_names = []
         self.token_field_dims = []
         self.float_field_names = []
@@ -1446,6 +1475,18 @@ class FMFirstOrderLinear(nn.Module):
 
         self.bias = nn.Parameter(torch.zeros((output_dim,)), requires_grad=True)
 
+    def embed_audio_features(self, interaction):
+        track_ids = interaction['tracks_id']
+        audio_features = self.id2afeats(track_ids)
+        embed_audio = self.wav_mlp(audio_features)
+        return embed_audio.unsqueeze(1)
+    
+    def embed_text_features(self, interaction):
+        track_ids = interaction['tracks_id']
+        text_features = self.id2tfeats(track_ids)
+        embed_text = self.text_mlp(text_features)
+        return embed_text.unsqueeze(1)
+    
     def embed_float_fields(self, float_fields):
         """Embed the float feature columns
 
@@ -1627,6 +1668,13 @@ class FMFirstOrderLinear(nn.Module):
         if token_seq_fields_embedding is not None:
             total_fields_embedding.append(token_seq_fields_embedding)
 
+        if self.use_audio:
+            audio_embedding = self.embed_audio_features(interaction)
+            total_fields_embedding.append(audio_embedding)
+        
+        if self.use_text:
+            text_embedding = self.embed_text_features(interaction)
+            total_fields_embedding.append(text_embedding)
         return (
             torch.sum(torch.cat(total_fields_embedding, dim=1), dim=1) + self.bias
         )  # [batch_size, output_dim]

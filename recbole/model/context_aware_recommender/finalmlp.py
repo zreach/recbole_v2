@@ -15,7 +15,7 @@ import torch
 import torch.nn as nn
 from torch.nn.init import xavier_normal_, constant_
 
-from recbole.model.abstract_recommender import ContextRecommender
+from recbole.model.abstract_recommender_my import ContextRecommender
 from recbole.model.layers import MLPLayers
 
 

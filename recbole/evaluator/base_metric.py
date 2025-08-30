@@ -108,7 +108,7 @@ class LossMetric(AbstractMetric):
     """
 
     metric_type = EvaluatorType.VALUE
-    metric_need = ["rec.score", "data.label"]
+    metric_need = ["rec.score", "data.label", "data.items", "data.users"]
 
     def __init__(self, config):
         super().__init__(config)

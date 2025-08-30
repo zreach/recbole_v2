@@ -14,7 +14,7 @@ Reference:
 import torch.nn as nn
 from torch.nn.init import xavier_normal_
 
-from recbole.model.abstract_recommender import ContextRecommender
+from recbole.model.abstract_recommender_my import ContextRecommender
 
 
 class LR(ContextRecommender):
@@ -35,11 +35,14 @@ class LR(ContextRecommender):
         self.loss = nn.BCEWithLogitsLoss()
 
         # parameters initialization
-        self.apply(self._init_weights)
+        for name, submodule in self.named_modules():
+            self._init_weights(name, submodule)
+            
+    def _init_weights(self, name, module):
+        if name not in ['id2afeats', 'id2tfeats']:
+            if isinstance(module, nn.Embedding):
+                xavier_normal_(module.weight.data)
 
-    def _init_weights(self, module):
-        if isinstance(module, nn.Embedding):
-            xavier_normal_(module.weight.data)
 
     def forward(self, interaction):
         output = self.first_order_linear(interaction)
