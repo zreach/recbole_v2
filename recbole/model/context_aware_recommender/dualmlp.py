@@ -40,9 +40,13 @@ class DualMLP(ContextRecommender):
             self._init_weights(name, submodule)
 
     def _init_weights(self, name, module):
-        if name != 'id2feature':
-            if isinstance(module, nn.Embedding) or isinstance(module, nn.Linear):
+        if isinstance(module, nn.Embedding):
+            if module.weight.requires_grad:
                 xavier_normal_(module.weight.data)
+        elif isinstance(module, nn.Linear):
+            xavier_normal_(module.weight.data)
+            if module.bias is not None:
+                constant_(module.bias.data, 0)
 
     def forward(self, interaction):
         embeddings = self.concat_embed_input_fields(

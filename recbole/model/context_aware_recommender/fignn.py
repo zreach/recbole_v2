@@ -106,16 +106,16 @@ class FiGNN(ContextRecommender):
             self._init_weights(name, submodule)
     
     def _init_weights(self, name, module):
-        if name not in ['id2afeats', 'id2tfeats']:
-            if isinstance(module, nn.Embedding):
+        if isinstance(module, nn.Embedding):
+            if module.weight.requires_grad:
                 xavier_normal_(module.weight.data)
-            elif isinstance(module, nn.Linear):
-                xavier_normal_(module.weight.data)
-                if module.bias is not None:
-                    constant_(module.bias.data, 0)
-            elif isinstance(module, nn.GRU):
-                xavier_uniform_(module.weight_hh_l0)
-                xavier_uniform_(module.weight_ih_l0)
+        elif isinstance(module, nn.Linear):
+            xavier_normal_(module.weight.data)
+            if module.bias is not None:
+                constant_(module.bias.data, 0)
+        elif isinstance(module, nn.GRU):
+            xavier_uniform_(module.weight_hh_l0)
+            xavier_uniform_(module.weight_ih_l0)
 
     def fignn_layer(self, in_feature):
         emb_feature = self.att_embedding(in_feature)

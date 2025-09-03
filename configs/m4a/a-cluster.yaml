@@ -1,0 +1,9 @@
+# audio相关
+use_cb: true
+use_audio: true
+layer: -1
+proj_method: cluster
+no_itemid: true
+n_cluster: 16
+
+a_feature_path: "dataset/m4a/m4a-muq.pkl"

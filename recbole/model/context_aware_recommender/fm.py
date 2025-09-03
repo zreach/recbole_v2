@@ -38,8 +38,8 @@ class FM(ContextRecommender):
         for name, submodule in self.named_modules():
             self._init_weights(name, submodule)
     def _init_weights(self, name, module):
-        if name not in ['id2afeats', 'id2tfeats']:
-            if isinstance(module, nn.Embedding):
+        if isinstance(module, nn.Embedding):
+            if module.weight.requires_grad:
                 xavier_normal_(module.weight.data)
 
 

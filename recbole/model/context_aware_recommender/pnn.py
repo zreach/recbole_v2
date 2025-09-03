@@ -66,13 +66,13 @@ class PNN(ContextRecommender):
         for name, submodule in self.named_modules():
             self._init_weights(name, submodule)
     def _init_weights(self, name, module):
-        if name not in ['id2afeats', 'id2tfeats']:
-            if isinstance(module, nn.Embedding):
+        if isinstance(module, nn.Embedding):
+            if module.weight.requires_grad:
                 xavier_normal_(module.weight.data)
-            elif isinstance(module, nn.Linear):
-                xavier_normal_(module.weight.data)
-                if module.bias is not None:
-                    constant_(module.bias.data, 0)
+        elif isinstance(module, nn.Linear):
+            xavier_normal_(module.weight.data)
+            if module.bias is not None:
+                constant_(module.bias.data, 0)
 
     def reg_loss(self):
         """Calculate the L2 normalization loss of model parameters.

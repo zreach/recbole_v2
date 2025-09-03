@@ -25,7 +25,7 @@ item_inter_num_interval: [5,1000000]
 epochs: 500 #训练的最大轮数
 # train_batch_size: 64 #训练的batch_size
 learner: adam #使用的pytorch内置优化器
-learning_rate: 0.001 #学习率
+learning_rate: 0.005 #学习率
 # training_neg_sample_num: 0 #负采样数目
 eval_step: 1 #每次训练后做evalaution的次数
 stopping_step: 10 #控制训练收敛的步骤数，在该步骤数内若选取的评测标准没有什么变化，就可以提前停止了
@@ -35,7 +35,8 @@ stopping_step: 10 #控制训练收敛的步骤数，在该步骤数内若选取�
 use_cb: true
 use_audio: true
 afeat_layer: 11
-proj_method: linear
+proj_method: cluster
+n_clusters: 16
 no_itemid: true
 
 a_feature_path: "dataset/m4a/m4a-muq.pkl"

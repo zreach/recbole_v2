@@ -14,16 +14,23 @@ recbole.model.abstract_recommender
 
 from logging import getLogger
 
+import os
+os.environ['OPENBLAS_NUM_THREADS'] = '1'
+os.environ['OMP_NUM_THREADS'] = '1'
+os.environ['MKL_NUM_THREADS'] = '1'
+os.environ['VECLIB_MAXIMUM_THREADS'] = '1'
+os.environ['NUMEXPR_NUM_THREADS'] = '1'
 import numpy as np
 import torch
 import torch.nn as nn
 import pickle
-import os
 from sklearn.cluster import KMeans
 
-from recbole.model.layers_v2 import FMEmbedding, FMFirstOrderLinear, FLEmbedding, MLPLayers
+from recbole.model.layers import FMEmbedding, FMFirstOrderLinear, FLEmbedding, MLPLayers
 from recbole.utils import ModelType, InputType, FeatureSource, FeatureType, set_color
 from recbole.model.loss import RegLoss
+
+from tqdm import tqdm
 
 class AbstractRecommender(nn.Module):
     r"""Base class for all models"""
@@ -380,7 +387,7 @@ class KnowledgeRecommender(AbstractRecommender):
 
 
 class Aggregator(nn.Module):
-    def __init__(self, embedding_size, token2id, feature_dict, config, proj_method="linear", layer=-1, n_clusters=2, mlp_dropout=0.2, mlp_size_list=None):
+    def __init__(self, embedding_size, token2id, feature_dict, config, proj_method="linear", layer=-1, n_clusters=2, n_stage=2, mlp_dropout=0.2, mlp_size_list=None):
         super().__init__()
         self.layer = layer
         self.proj_method = proj_method
@@ -392,42 +399,78 @@ class Aggregator(nn.Module):
         self.config = config
 
 
+
         if len(feature_shape) == 1:
             H = feature_shape
             for k, v in feature_dict.items():
                 feature_dict[k] = v.reshape(1, 1, -1)
             L = 1
+            T = 1
         elif len(feature_shape) == 2:
             L, H = feature_shape
             for k, v in feature_dict.items():
                 feature_dict[k] = v.reshape(L, 1, H)
+            
+            T = 1
         elif len(feature_shape) == 3:
             L, T, H = feature_shape
             self.has_time = True
         else:
             raise ValueError(f"Feature dimension not supported: {len(feature_shape)}")
         self.feature_size = H
-        if layer == 'weighted_mean':
-            self.weights = nn.Parameter(torch.ones((L, 1)), requires_grad=True)
-        
-        feature_token = torch.zeros((len(self.token2id['tracks_id']), H))
-        
-        # TODO 还有对时间的平均
-        for k, v in self.token2id['tracks_id'].items():
-            if k == '[PAD]':
-                feature = np.zeros((H))
-            else:
-                feature = feature_dict[k]
-                feature = np.mean(feature, axis=1, keepdims=False) # 对时间维度做平均
-                if layer == "mean":
-                    feature = np.mean(feature, axis=0, keepdims=False)
-                else:
-                    feature = feature[layer] # 取某层
-            feature_token[v] = torch.Tensor(feature)
-        self.id2feats = nn.Embedding.from_pretrained(feature_token)
-        self.id2feats.requires_grad_(False)
-        
 
+        if layer == 'weighted_sum':
+            self.weights = nn.Parameter(torch.ones((L, 1)), requires_grad=True)
+
+            # 保存所有层的信息，不进行聚合
+            # feature_token = {}
+            feature_token = np.zeros((len(self.token2id['tracks_id']), L, H))
+            for v in tqdm(feature_dict.keys()):
+                feature = feature_dict[v]  # shape: [L, T, H] 或 [L, H]
+                
+                if len(feature.shape) == 3:  # [L, T, H]
+                    # 先对时间维度取平均: [L, T, H] -> [L, H]
+                    feature = np.mean(feature, axis=1)  # [L, H]
+                
+                feature_token[v] = torch.tensor(feature, dtype=torch.float32)  # 保持 [L, H] 格式
+            
+            # 创建embedding保存所有层信息: [num_tracks, L, H]
+            # all_features = torch.stack(list(feature_token.values()))  # [num_tracks, L, H]
+            self.id2feats = nn.Embedding.from_pretrained(feature_token.view(-1, L * H))  # 展平存储
+            self.id2feats.requires_grad_(False)
+            
+            
+            self.feature_dim = H  # 保存特征维度
+        
+        else:
+            # TODO 还有对时间的平均
+            feature_token = torch.zeros((len(self.token2id['tracks_id']), H))
+            for k, v in self.token2id['tracks_id'].items():
+                if k == '[PAD]':
+                    feature = np.zeros((H))
+                else:
+                    feature = feature_dict[k]
+                    feature = np.mean(feature, axis=1, keepdims=False) # 对时间维度做平均
+                    if layer == "mean":
+                        feature = np.mean(feature, axis=0, keepdims=False)
+                    else:
+                        feature = feature[layer] # 取某层
+                feature_token[v] = torch.Tensor(feature)
+            # all_features = torch.stack(list(feature_token.values()))  # [num_tracks, H]
+            self.id2feats = nn.Embedding.from_pretrained(feature_token)  
+            self.id2feats.requires_grad_(False)
+            
+            self.feature_dim = H  # 保存特征维度
+
+        # feature_token = torch.zeros((len(self.token2id['tracks_id']), H))
+        self.L = L
+
+        if proj_method in ['mlp', 'linear']:
+            self.num_feature_filed = 1
+        elif proj_method in ['cluster']:
+            self.num_feature_filed = self.L
+        elif proj_method in ['rq-kmeans']:
+            self.num_feature_filed = n_stage
         # 线性聚合参数
         if proj_method == 'linear':
             self.net = nn.Linear(H, embedding_size, bias=True)
@@ -439,32 +482,152 @@ class Aggregator(nn.Module):
             self.net = MLPLayers(size_list, mlp_dropout)
         # 聚类聚合参数
         elif proj_method == 'cluster':
-            self.embedding_tables = []
+            self.embedding_tables = nn.ModuleList()
             keys = list(feature_dict.keys())
             self.n_clusters = n_clusters
-            for l in range(L):
-                vectors = np.array(list(feature_dict.values()))[:, l, :]
+            # self.L = L
+
+            track_ids_ordered = []
+            features_ordered = []
+    
+            for track_id, idx in sorted(token2id['tracks_id'].items(), key=lambda x: x[1]):
+                # if track_id in feature_dict:
+                if track_id == '[PAD]':
+                    feature = np.zeros((L, T, H))
+                else:
+                    feature = feature_dict[track_id]
+                track_ids_ordered.append(track_id)
+                features_ordered.append(feature)
+
+            track_to_cluster_map = []
+
+            print("Clustering features ...")
+            
+            # os.environ['NUM']
+            # os.environ['OPENBLAS_NUM_THREADS'] = '64'
+            features_array = np.mean(np.array(features_ordered), axis=2, keepdims=False)
+            for l in tqdm(range(self.L)):
+                  # 先对时间维度做平均 -> [N, L, H]
+                vectors = features_array[:, l, :]  # 使用有序的feature
+                # print(np.array(features_ordered).shape)
+                # print(vectors.shape)
                 kmeans = KMeans(n_clusters=n_clusters, random_state=42, n_init='auto')
+                kmeans.fit(vectors)
                 labels = kmeans.labels_
-                clustered_results = {key: label for key, label in zip(keys, labels)}
+                # clustered_results = {key: label for key, label in zip(keys, labels)}
+                track_to_cluster_map.append(labels)
                 self.embedding_tables.append(nn.Embedding(n_clusters, embedding_size))
+            
+            self.register_buffer('track_to_cluster_map', 
+                        torch.tensor(track_to_cluster_map).T)  # [num_tracks, L]
+            # self.track_id_to_idx = {track_id: idx for idx, track_id in enumerate(keys)}
+            self.track_ids_ordered = track_ids_ordered
         elif proj_method == 'rq-kmeans':
+            self.embedding_tables = nn.ModuleList()
+            for l in range(n_stage):
+                self.embedding_tables.append(nn.Embedding(n_clusters, embedding_size))
             from RQ import RQKMeans
             keys = list(feature_dict.keys())
             self.n_clusters = n_clusters
+
+            track_ids_ordered = []
+            features_ordered = []
+    
+            for track_id, idx in sorted(token2id['tracks_id'].items(), key=lambda x: x[1]):
+                # if track_id in feature_dict:
+                if track_id == '[PAD]':
+                    feature = np.zeros((L, T, H))
+                else:
+                    feature = feature_dict[track_id]
+                track_ids_ordered.append(track_id)
+                features_ordered.append(feature)
+
+            track_to_cluster_map = []
+
+            print("Clustering features ...")
+            features_array = np.mean(np.array(features_ordered), axis=2, keepdims=False) # [N, L, H]
+            feature_array = features_array.reshape(-1, L * H) # [N, L*H]
+            self.rq = RQKMeans(n_stages=n_stage, n_clusters=n_clusters)
+            self.rq.fit(feature_array)
+            encoded_results = []
+            for i in range(len(feature_array)):
+                code = self.rq.encode(feature_array[i])
+                encoded_results.append(code)
+            
+            encoded_tensor = torch.tensor(encoded_results)  # [N, n_stage]
+            self.register_buffer('track_to_cluster_map', encoded_tensor)
+
+            self.n_stage = n_stage
         else:
             raise ValueError(f"Unknown projection method: {proj_method}")
 
     def forward(self, interaction):
         if self.proj_method in ['linear', 'mlp']:
             track_ids = interaction['tracks_id']
-            wav_features = self.id2feats(track_ids)
+            
+            if hasattr(self, 'layer') and self.layer == 'weighted_sum':
+                # 获取所有层特征并reshape回 [batch_size, L, H]
+                all_features = self.id2feats(track_ids)  # [batch_size, L*H]
+                batch_size = all_features.size(0)
+                all_features = all_features.view(batch_size, self.L, self.feature_dim)  # [batch_size, L, H]
+                
+                # 在forward时进行加权聚合
+                # weights: [L, 1], all_features: [batch_size, L, H]
+                weights = torch.softmax(self.weights, dim=0)  # 使用softmax确保权重和为1
+                wav_features = torch.sum(weights.unsqueeze(0) * all_features, dim=1)  # [batch_size, H]
+            else:
+                wav_features = self.id2feats(track_ids)
+                
             embed_features = self.net(wav_features)
             return embed_features.unsqueeze(1)
+        elif self.proj_method == 'cluster':
+            return self.get_cluster_embeddings(interaction['tracks_id'])
         else:
             raise ValueError(f"Unknown aggregation method: {self.proj_method}")
 
-
+    def get_cluster_embeddings(self, track_ids):
+        """
+        获取track_ids对应的L个cluster embeddings
+        Args:
+            track_ids: tensor of shape [batch_size] (这些是token2id['tracks_id']中的索引值)
+        Returns:
+            embeddings: tensor of shape [batch_size, L, embedding_size]
+        """
+        # track_ids已经是token2id['tracks_id']中的索引，直接使用
+        # 但需要减去padding_idx(通常是0)来对齐到我们的映射表
+        track_indices = track_ids  # 假设padding_idx=0，实际track索引从1开始
+        
+        # 获取聚类ID [batch_size, L]
+        cluster_ids = self.track_to_cluster_map[track_indices]
+        
+        # 批量获取embeddings
+        embeddings = []
+        for l in range(self.L):
+            emb = self.embedding_tables[l](cluster_ids[:, l])  # [batch_size, embedding_size]
+            embeddings.append(emb)
+        
+        
+        return torch.stack(embeddings, dim=1)  # [batch_size, L, embedding_size]
+    
+    def get_rq_cluster_embeddings(self, track_ids):
+        """
+        获取track_ids对应的RQ编码embeddings
+        Args:
+            track_ids: tensor of shape [batch_size]
+        Returns:
+            embeddings: list of n_stage tensors, each of shape [batch_size, embedding_size]
+        """
+        # 获取对应的编码ID [batch_size, n_stage]
+        track_indices = track_ids  # 假设padding_idx=0
+        cluster_ids = self.track_to_cluster_map[track_indices]
+        
+        # 获取每个stage的embeddings
+        embeddings = []
+        for stage in range(self.n_stages):
+            emb = self.embedding_tables[stage](cluster_ids[:, stage])  # [batch_size, embedding_size]
+            embeddings.append(emb)
+        
+        return embeddings  # List of [batch_size, embedding_size]
 class ContextRecommender(AbstractRecommender):
     """This is a abstract context-aware recommender. All the context-aware model should implement this class.
     The base context-aware recommender class provide the basic embedding function of feature fields which also
@@ -545,6 +708,8 @@ class ContextRecommender(AbstractRecommender):
                     layer=config['afeat_layer'] if 'afeat_layer' in config else -1,
                     mlp_dropout= config['wav_dropout'] if 'wav_dropout' in config else 0.2,
                     mlp_size_list= config['wav_mlp_sizes'] if 'wav_mlp_sizes' in config else [512, 32],
+                    n_clusters = config['n_clusters'] if 'n_clusters' in config else 16,
+                    n_stage = config['n_stage'] if 'n_stage' in config else 2,
                 )
 
             if self.use_text:
@@ -655,7 +820,7 @@ class ContextRecommender(AbstractRecommender):
             # ] + config['wav_mlp_sizes'] + [self.embedding_size]
             # self.wav_mlp = MLPLayers(size_list, wav_dropout, last_activation = None)
             # self.wav_fc = nn.Linear(1024, self.embedding_size)
-            self.num_feature_field += 1
+            self.num_feature_field += self.a_aggregator.num_feature_filed
         if self.use_text:
             text_dropout = config['text_dropout'] if 'text_dropout' in config else 0.2
             size_list = [
@@ -896,8 +1061,11 @@ class ContextRecommender(AbstractRecommender):
         all_embeddings = []
         if self.use_audio:
             # wav_embedding = self.get_wav_embedding(interaction) 
-            wav_embedding = self.a_aggregator(interaction)
-            all_embeddings.append(wav_embedding)
+            wav_embeddings = self.a_aggregator(interaction)
+            # for emb in wav_embeddings:
+            #     print(emb.shape)
+            #     all_embeddings.append(emb)
+            all_embeddings.append(wav_embeddings)
         if self.use_text:
             text_embedding = self.get_text_embedding(interaction)
             all_embeddings.append(text_embedding)
