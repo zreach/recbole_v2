@@ -253,7 +253,7 @@ class Trainer(AbstractTrainer):
                     loss_tuple
                     if total_loss is None
                     else tuple(map(sum, zip(total_loss, loss_tuple)))
-                )
+                ) 
             else:
                 loss = losses
                 total_loss = (

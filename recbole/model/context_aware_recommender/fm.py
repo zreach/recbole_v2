@@ -55,7 +55,7 @@ class FM(ContextRecommender):
         return y.squeeze(-1)
 
     def calculate_loss(self, interaction):
-        label = interaction[self.LABEL]
+        label = interaction[self.LABEL].float()
 
         output = self.forward(interaction)
         return self.loss(output, label) # + self.reg_loss()

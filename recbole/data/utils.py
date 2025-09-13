@@ -70,6 +70,7 @@ def create_dataset(config):
             return dataset
 
     dataset = dataset_class(config)
+    dataset.inter_feat['label'] = dataset.inter_feat['label'].astype(float)
     if config["save_dataset"]:
         dataset.save()
     return dataset

@@ -107,6 +107,9 @@ class Dataset(torch.utils.data.Dataset):
         self.dataset_name = config["dataset"]
         self.logger = getLogger()
         self._from_scratch()
+        # if max(self.inter_feat['label'] == 2):
+        #     self.inter_feat['label'] = self.inter_feat['label'] - 1
+        # self.inter_feat['label'] = self.inter_feat['label'].float()
 
     def _from_scratch(self):
         """Load dataset from scratch.

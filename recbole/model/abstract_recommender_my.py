@@ -397,6 +397,7 @@ class Aggregator(nn.Module):
         self.has_time = False
         feature_shape = list(feature_dict.values())[0].shape
         self.config = config
+        # self.n_stage
 
 
 
@@ -419,24 +420,28 @@ class Aggregator(nn.Module):
             raise ValueError(f"Feature dimension not supported: {len(feature_shape)}")
         self.feature_size = H
 
-        if layer == 'weighted_sum':
+        if layer == 'weighted_sum' or proj_method in ['transformer', 'moe']:
             self.weights = nn.Parameter(torch.ones((L, 1)), requires_grad=True)
 
             # 保存所有层的信息，不进行聚合
             # feature_token = {}
             feature_token = np.zeros((len(self.token2id['tracks_id']), L, H))
-            for v in tqdm(feature_dict.keys()):
-                feature = feature_dict[v]  # shape: [L, T, H] 或 [L, H]
-                
-                if len(feature.shape) == 3:  # [L, T, H]
-                    # 先对时间维度取平均: [L, T, H] -> [L, H]
-                    feature = np.mean(feature, axis=1)  # [L, H]
-                
-                feature_token[v] = torch.tensor(feature, dtype=torch.float32)  # 保持 [L, H] 格式
+            for k, v in self.token2id['tracks_id'].items():
+                if k == '[PAD]':
+                    feature = np.zeros((L, H))
+                else:
+                    feature = feature_dict[k]  # shape: [L, T, H] 或 [L, H]
+                    
+                    if len(feature.shape) == 3:  # [L, T, H]
+                        # 先对时间维度取平均: [L, T, H] -> [L, H]
+                        feature = np.mean(feature, axis=1)  # [L, H]
+                feature_token[v] = feature
+                # feature_token[v] = torch.tensor(feature, dtype=torch.float32)  # 保持 [L, H] 格式
             
             # 创建embedding保存所有层信息: [num_tracks, L, H]
             # all_features = torch.stack(list(feature_token.values()))  # [num_tracks, L, H]
-            self.id2feats = nn.Embedding.from_pretrained(feature_token.view(-1, L * H))  # 展平存储
+            # self.id2feats = nn.Embedding.from_pretrained(feature_token.view(-1, L * H))  # 展平存储
+            self.id2feats = nn.Embedding.from_pretrained(torch.from_numpy(feature_token).view(-1, L * H).float())
             self.id2feats.requires_grad_(False)
             
             
@@ -465,12 +470,12 @@ class Aggregator(nn.Module):
         # feature_token = torch.zeros((len(self.token2id['tracks_id']), H))
         self.L = L
 
-        if proj_method in ['mlp', 'linear']:
+        if proj_method in ['mlp', 'linear', 'transformer', 'moe']:
             self.num_feature_filed = 1
         elif proj_method in ['cluster']:
             self.num_feature_filed = self.L
         elif proj_method in ['rq-kmeans']:
-            self.num_feature_filed = n_stage
+            self.num_feature_filed = n_stage * self.L
         # 线性聚合参数
         if proj_method == 'linear':
             self.net = nn.Linear(H, embedding_size, bias=True)
@@ -480,53 +485,163 @@ class Aggregator(nn.Module):
                 H
             ] + mlp_size_list + [self.embedding_size]
             self.net = MLPLayers(size_list, mlp_dropout)
+
+        elif proj_method == 'transformer':
+            from torch.nn import MultiheadAttention, LayerNorm
+
+            self.transformer_layers = config['transformer_layers'] if 'transformer_layers' in config else 2
+            self.transformer_heads = config['transformer_heads'] if 'transformer_heads' in config else 8
+            self.transformer_dropout = config['transformer_dropout'] if 'transformer_dropout' in config else 0.1
+
+            assert H % self.transformer_heads == 0, f"Hidden size {H} must be divisible by number of heads {self.transformer_heads}"
+
+            self.transformer_encoder_layers = nn.ModuleList()
+            for _ in range(self.transformer_layers):
+                # 多头注意力层
+                attention_layer = MultiheadAttention(
+                    embed_dim=H,
+                    num_heads=self.transformer_heads,
+                    dropout=self.transformer_dropout,
+                    batch_first=True
+                )
+                # 层归一化
+                norm1 = LayerNorm(H)
+                norm2 = LayerNorm(H)
+                # 前馈网络
+                ffn = nn.Sequential(
+                    nn.Linear(H, H * 4),
+                    nn.ReLU(),
+                    nn.Dropout(self.transformer_dropout),
+                    nn.Linear(H * 4, H),
+                    nn.Dropout(self.transformer_dropout)
+                )
+                
+                self.transformer_encoder_layers.append(nn.ModuleDict({
+                    'attention': attention_layer,
+                    'norm1': norm1,
+                    'norm2': norm2,
+                    'ffn': ffn
+                }))
+
+            # 位置编码（可选）
+            self.use_pos_encoding = config['use_pos_encoding'] if 'use_pos_encoding' in config else False
+            if self.use_pos_encoding:
+                self.pos_encoding = nn.Parameter(torch.randn(1, L, H) * 0.02)
+            
+            # 最终投影层
+            self.output_projection = nn.Linear(H, embedding_size)
+            
+            # 聚合方法：'cls', 'mean', 'max', 'last'
+            self.pooling_method = config['pooling_method'] if 'pooling_method' in config else 'cls'
+            if self.pooling_method == 'cls':
+                # 添加CLS token
+                self.cls_token = nn.Parameter(torch.randn(1, 1, H) * 0.02)
+
+        elif proj_method == 'moe':
+            self.gate_type = config['moe_gate_type'] if 'moe_gate_type' in config else 'user'
+            self.experts = nn.ModuleList()
+            for i in range(L):
+                expert = nn.Sequential(
+                    nn.Linear(H, H // 2),
+                    nn.ReLU(),
+                    nn.Dropout(mlp_dropout),
+                    nn.Linear(H // 2, embedding_size)
+                )
+                self.experts.append(expert)
+            
+            # 门控网络：根据输入特征选择专家
+            if self.gate_type == 'both':
+                gate_input_dim = H + embedding_size
+            elif self.gate_type == 'user':
+                gate_input_dim = embedding_size
+            elif self.gate_type == 'item':
+                gate_input_dim = H
+            self.gate_network = nn.Sequential(
+                nn.Linear(gate_input_dim, gate_input_dim // 2),
+                nn.ReLU(),
+                nn.Dropout(mlp_dropout),
+                nn.Linear(gate_input_dim // 2, L),
+                nn.Softmax(dim=-1)
+            )
+
+            # 可选：temperature参数用于控制选择的锐度
+            self.temperature = config['moe_temperature'] if 'moe_temperature' in config else 1.0
+            
+            # 可选：是否使用hard selection (top-1) 或 soft selection (weighted)
+            self.use_hard_selection = config['moe_hard_selection'] if 'moe_hard_selection' in config else True
         # 聚类聚合参数
         elif proj_method == 'cluster':
             self.embedding_tables = nn.ModuleList()
             keys = list(feature_dict.keys())
             self.n_clusters = n_clusters
+
+            cluster_save_root = config['cluster_save_root'] if 'cluster_ave_root' in config else './cluster_results'
+            os.makedirs(cluster_save_root, exist_ok=True)
+            cluster_save_path = os.path.join(cluster_save_root, f"{config['dataset']}_n{n_clusters}_kmeans.pkl")
             # self.L = L
+            if os.path.exists(cluster_save_path):
+                print(f"Loading existing cluster results from {cluster_save_path}")
+                with open(cluster_save_path, 'rb') as f:
+                    cluster_data = pickle.load(f)
+                    track_to_cluster_map = cluster_data['track_to_cluster_map']
+                    track_ids_ordered = cluster_data['track_ids_ordered']
 
-            track_ids_ordered = []
-            features_ordered = []
-    
-            for track_id, idx in sorted(token2id['tracks_id'].items(), key=lambda x: x[1]):
-                # if track_id in feature_dict:
-                if track_id == '[PAD]':
-                    feature = np.zeros((L, T, H))
-                else:
-                    feature = feature_dict[track_id]
-                track_ids_ordered.append(track_id)
-                features_ordered.append(feature)
+            else:
+                print(f"Cluster results not found. Creating new clusters...")
+                
+                track_ids_ordered = []
+                features_ordered = []
 
-            track_to_cluster_map = []
+                for track_id, idx in sorted(token2id['tracks_id'].items(), key=lambda x: x[1]):
+                    if track_id == '[PAD]':
+                        feature = np.zeros((L, T, H))
+                    else:
+                        feature = feature_dict[track_id]
+                    track_ids_ordered.append(track_id)
+                    features_ordered.append(feature)
 
-            print("Clustering features ...")
-            
-            # os.environ['NUM']
-            # os.environ['OPENBLAS_NUM_THREADS'] = '64'
-            features_array = np.mean(np.array(features_ordered), axis=2, keepdims=False)
-            for l in tqdm(range(self.L)):
-                  # 先对时间维度做平均 -> [N, L, H]
-                vectors = features_array[:, l, :]  # 使用有序的feature
-                # print(np.array(features_ordered).shape)
-                # print(vectors.shape)
-                kmeans = KMeans(n_clusters=n_clusters, random_state=42, n_init='auto')
-                kmeans.fit(vectors)
-                labels = kmeans.labels_
-                # clustered_results = {key: label for key, label in zip(keys, labels)}
-                track_to_cluster_map.append(labels)
-                self.embedding_tables.append(nn.Embedding(n_clusters, embedding_size))
+                track_to_cluster_map = []
+                print("Clustering features ...")
+                
+                features_array = np.mean(np.array(features_ordered), axis=2, keepdims=False)
+                for l in tqdm(range(self.L)):
+                    vectors = features_array[:, l, :]
+                    
+                    import gc
+                    gc.collect()
+                    
+                    kmeans = KMeans(n_clusters=n_clusters, random_state=42, n_init='auto')
+                    kmeans.fit(vectors)
+                    labels = kmeans.labels_
+                    track_to_cluster_map.append(labels)
+                    self.embedding_tables.append(nn.Embedding(n_clusters, embedding_size))
+                
+                # 保存聚类结果
+                cluster_data = {
+                    'track_to_cluster_map': track_to_cluster_map,
+                    'track_ids_ordered': track_ids_ordered
+                }
+                print(f"Saving cluster results to {cluster_save_path}")
+                with open(cluster_save_path, 'wb') as f:
+                    pickle.dump(cluster_data, f)
+            # 无论是加载还是新建，都需要创建embedding tables
+            if os.path.exists(cluster_save_path) and len(self.embedding_tables) == 0:
+                for l in range(self.L):
+                    self.embedding_tables.append(nn.Embedding(n_clusters, embedding_size))
             
             self.register_buffer('track_to_cluster_map', 
-                        torch.tensor(track_to_cluster_map).T)  # [num_tracks, L]
-            # self.track_id_to_idx = {track_id: idx for idx, track_id in enumerate(keys)}
+                                torch.tensor(track_to_cluster_map).T)  # [num_tracks, L]
             self.track_ids_ordered = track_ids_ordered
         elif proj_method == 'rq-kmeans':
             self.embedding_tables = nn.ModuleList()
-            for l in range(n_stage):
-                self.embedding_tables.append(nn.Embedding(n_clusters, embedding_size))
-            from RQ import RQKMeans
+            
+            for l in range(L):  # 对每一层
+                layer_embeddings = nn.ModuleList()
+                for stage in range(n_stage):  # 对每个stage
+                    layer_embeddings.append(nn.Embedding(n_clusters, embedding_size))
+                self.embedding_tables.append(layer_embeddings)
+
+            from recbole.model.RQ_optimized import RQKMeans
             keys = list(feature_dict.keys())
             self.n_clusters = n_clusters
 
@@ -546,16 +661,61 @@ class Aggregator(nn.Module):
 
             print("Clustering features ...")
             features_array = np.mean(np.array(features_ordered), axis=2, keepdims=False) # [N, L, H]
-            feature_array = features_array.reshape(-1, L * H) # [N, L*H]
-            self.rq = RQKMeans(n_stages=n_stage, n_clusters=n_clusters)
-            self.rq.fit(feature_array)
-            encoded_results = []
-            for i in range(len(feature_array)):
-                code = self.rq.encode(feature_array[i])
-                encoded_results.append(code)
+            for layer in tqdm(range(L)):  # 对每一层进行编码
+                layer_features = features_array[:, layer, :]  # [N, H]
+                
+                # 为当前层创建RQ编码器
+                rq_layer = RQKMeans(n_stages=n_stage, n_clusters=n_clusters)
+                rq_layer.fit(layer_features)
+                
+                # 对当前层所有track进行编码
+                layer_encoded_results = []
+                for i in tqdm(range(len(layer_features))):
+                    code = rq_layer.encode(layer_features[i:i+1])  # 返回 [n_stage] 的编码
+                    layer_encoded_results.append(code)  # 去掉batch维度
+                
+                track_to_cluster_map.append(layer_encoded_results)  # [L, N, n_stage]
             
-            encoded_tensor = torch.tensor(encoded_results)  # [N, n_stage]
+            print(torch.tensor(track_to_cluster_map).shape)
+            encoded_tensor = torch.tensor(track_to_cluster_map).permute(1, 0, 2)  # [N, L, n_stage]
             self.register_buffer('track_to_cluster_map', encoded_tensor)
+
+            # 统计编码碰撞数
+            print("Analyzing code collisions...")
+            
+            # 将每个track的完整编码转换为字符串用于统计
+            code_combinations = []
+            for i in range(len(track_ids_ordered)):
+                # 获取track i的所有层所有stage的编码
+                track_codes = []
+                for layer in range(L):
+                    for stage in range(n_stage):
+                        track_codes.append(str(track_to_cluster_map[layer][i][stage]))
+                
+                # 将所有编码组合成一个字符串
+                code_str = '_'.join(track_codes)
+                code_combinations.append(code_str)
+            
+            # 统计碰撞
+            from collections import Counter
+            code_counter = Counter(code_combinations)
+
+            # 分析结果
+            unique_codes = len(code_counter)
+            total_tracks = len(track_ids_ordered)
+            collision_count = 0
+            collision_tracks = 0
+            
+            for code, count in code_counter.items():
+                if count > 1:
+                    collision_count += 1
+                    collision_tracks += count
+            print(f"=== RQ-KMeans Encoding Statistics ===")
+            print(f"Total tracks: {total_tracks}")
+            print(f"Unique code combinations: {unique_codes}")
+            print(f"Collision rate: {collision_tracks/total_tracks:.4f} ({collision_tracks}/{total_tracks})")
+            print(f"Number of colliding codes: {collision_count}")
+            print(f"Average tracks per colliding code: {collision_tracks/collision_count:.2f}" if collision_count > 0 else "No collisions")
 
             self.n_stage = n_stage
         else:
@@ -582,9 +742,106 @@ class Aggregator(nn.Module):
             return embed_features.unsqueeze(1)
         elif self.proj_method == 'cluster':
             return self.get_cluster_embeddings(interaction['tracks_id'])
+        elif self.proj_method == 'rq-kmeans':
+            return self.get_rq_cluster_embeddings(interaction['tracks_id'])
+        elif self.proj_method == 'transformer':
+            return self.get_transformer_embeddings(interaction['tracks_id'])
+        elif self.proj_method == 'moe':
+            return self.get_moe_embeddings(interaction['tracks_id'])
         else:
             raise ValueError(f"Unknown aggregation method: {self.proj_method}")
 
+    def get_transformer_embeddings(self, track_ids):
+        # track_ids = interaction['tracks_id']
+        all_features = self.id2feats(track_ids)  # [batch_size, L*H]
+        batch_size = all_features.size(0)
+        L = self.L
+        H = self.feature_dim
+        features = all_features.view(batch_size, L, H)  # [batch_size, L, H]
+        # 加CLS token
+        if self.pooling_method == 'cls':
+            cls_token = self.cls_token.expand(batch_size, -1, -1)  # [batch_size, 1, H]
+            features = torch.cat([cls_token, features], dim=1)  # [batch_size, L+1, H]
+        # 加位置编码
+        if self.use_pos_encoding:
+            pos_encoding = self.pos_encoding
+            if features.size(1) > pos_encoding.size(1):
+                # 如果有CLS，补一行
+                pos_encoding = torch.cat([torch.zeros(1,1,H,device=features.device), pos_encoding], dim=1)
+            features = features + pos_encoding
+
+        x = features
+        for layer in self.transformer_encoder_layers:
+            attn_out, _ = layer['attention'](x, x, x)
+            x = layer['norm1'](x + attn_out)
+            ffn_out = layer['ffn'](x)
+            x = layer['norm2'](x + ffn_out)
+
+        # 聚合
+        if self.pooling_method == 'cls':
+            pooled = x[:, 0]  # [batch_size, H]
+        elif self.pooling_method == 'mean':
+            pooled = x.mean(dim=1)  # [batch_size, H]
+        elif self.pooling_method == 'max':
+            pooled, _ = x.max(dim=1)  # [batch_size, H]
+        elif self.pooling_method == 'last':
+            pooled = x[:, -1]  # [batch_size, H]
+        else:
+            raise ValueError(f"Unknown pooling method: {self.pooling_method}")
+
+        embed_features = self.output_projection(pooled)  # [batch_size, embedding_size]
+        return embed_features.unsqueeze(1)
+    def get_moe_embeddings(self, track_ids):
+        all_features = self.id2feats(track_ids)  # [batch_size, L*H]
+        batch_size = all_features.size(0)
+        L = self.L
+        H = self.feature_dim
+        features = all_features.view(batch_size, L, H)  # [batch_size, L, H]
+        
+        # 计算每层特征的平均值作为门控网络的输入
+        # 可以使用不同的策略，这里使用所有层的平均
+        gate_input = features.mean(dim=1)  # [batch_size, H]
+        
+        # 通过门控网络计算每个专家的权重
+        gate_scores = self.gate_network(gate_input)  # [batch_size, L]
+        
+        # 应用temperature
+        if self.temperature != 1.0:
+            gate_scores = gate_scores / self.temperature
+            gate_scores = torch.softmax(gate_scores, dim=-1)
+        
+        if self.use_hard_selection:
+            # Hard selection: 选择top-1专家（向量化版本）
+            _, top_expert_idx = torch.max(gate_scores, dim=-1)  # [batch_size]
+            
+            # 向量化选择特征和专家
+            batch_indices = torch.arange(batch_size, device=features.device)
+            selected_features = features[batch_indices, top_expert_idx]  # [batch_size, H]
+            
+            # 预计算所有专家的输出
+            all_expert_outputs = []
+            for expert in self.experts:
+                expert_output = expert(selected_features)  # [batch_size, embedding_size]
+                all_expert_outputs.append(expert_output)
+            all_expert_outputs = torch.stack(all_expert_outputs, dim=1)  # [batch_size, L, embedding_size]
+            
+            # 根据选择的专家索引提取对应输出
+            final_embeddings = all_expert_outputs[batch_indices, top_expert_idx]  # [batch_size, embedding_size]
+        else:
+            # Soft selection: 加权组合所有专家的输出
+            expert_outputs = []
+            for layer_idx in range(L):
+                layer_features = features[:, layer_idx, :]  # [batch_size, H]
+                expert_output = self.experts[layer_idx](layer_features)  # [batch_size, embedding_size]
+                expert_outputs.append(expert_output)
+            
+            expert_outputs = torch.stack(expert_outputs, dim=1)  # [batch_size, L, embedding_size]
+            
+            # 加权求和
+            gate_scores = gate_scores.unsqueeze(-1)  # [batch_size, L, 1]
+            final_embeddings = torch.sum(gate_scores * expert_outputs, dim=1)  # [batch_size, embedding_size]
+        
+        return final_embeddings.unsqueeze(1)
     def get_cluster_embeddings(self, track_ids):
         """
         获取track_ids对应的L个cluster embeddings
@@ -615,19 +872,23 @@ class Aggregator(nn.Module):
         Args:
             track_ids: tensor of shape [batch_size]
         Returns:
-            embeddings: list of n_stage tensors, each of shape [batch_size, embedding_size]
+            embeddings: tensor of shape [batch_size, L*n_stage, embedding_size]
         """
-        # 获取对应的编码ID [batch_size, n_stage]
-        track_indices = track_ids  # 假设padding_idx=0
-        cluster_ids = self.track_to_cluster_map[track_indices]
+        track_indices = track_ids
         
-        # 获取每个stage的embeddings
+        # 获取编码 [batch_size, L, n_stage]
+        cluster_ids = self.track_to_cluster_map[track_indices]  # [batch_size, L, n_stage]
+        
+        # 获取所有层所有stage的embeddings
         embeddings = []
-        for stage in range(self.n_stages):
-            emb = self.embedding_tables[stage](cluster_ids[:, stage])  # [batch_size, embedding_size]
-            embeddings.append(emb)
+        for layer in range(self.L):
+            for stage in range(self.n_stage):
+                # 使用对应层的embedding table
+                emb = self.embedding_tables[layer][stage](cluster_ids[:, layer, stage])  # [batch_size, embedding_size]
+                embeddings.append(emb)
         
-        return embeddings  # List of [batch_size, embedding_size]
+        # print(torch.stack(embeddings, dim=1).shape)
+        return torch.stack(embeddings, dim=1)  # [batch_size, L*n_stage, embedding_size]
 class ContextRecommender(AbstractRecommender):
     """This is a abstract context-aware recommender. All the context-aware model should implement this class.
     The base context-aware recommender class provide the basic embedding function of feature fields which also

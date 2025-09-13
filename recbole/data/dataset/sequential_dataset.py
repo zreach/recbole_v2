@@ -45,6 +45,10 @@ class SequentialDataset(Dataset):
 
         if self.config["benchmark_filename"] is not None:
             return
+        # TODO: 找到label为2的bug
+        if max(self.inter_feat['label'] == 2):
+            self.inter_feat['label'] = self.inter_feat['label'] - 1
+        self.inter_feat['label'] = self.inter_feat['label'].float()
         self.logger.debug("Augmentation for sequential recommendation.")
         self.data_augmentation()
 

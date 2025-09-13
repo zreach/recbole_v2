@@ -127,7 +127,7 @@ class RQKMeans:
 if __name__ == "__main__":
     # Generate sample data
     np.random.seed(42)
-    n_samples, n_features = 1000, 128
+    n_samples, n_features = 60000, 1024 * 12
     X = np.random.randn(n_samples, n_features)
     
     # Initialize and train RQ-Kmeans
