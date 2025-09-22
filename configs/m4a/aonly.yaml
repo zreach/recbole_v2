@@ -34,13 +34,13 @@ stopping_step: 10 #控制训练收敛的步骤数，在该步骤数内若选取�
 # audio相关
 use_cb: true
 use_audio: true
-afeat_layer: 11
+afeat_layer: -1
 proj_method: mlp
 no_itemid: true
 
 a_feature_path: "dataset/m4a/m4a-muq.pkl"
 # map_path: "dataset/m4a-fil/id2msd.pkl"
-wav_mlp_sizes: [512, 32]
+wav_mlp_sizes: [512]
 wav_dropout: 0.2
 
 neg_my: true

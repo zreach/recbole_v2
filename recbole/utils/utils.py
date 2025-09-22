@@ -205,7 +205,7 @@ def init_seed(seed, reproducibility):
         torch.backends.cudnn.deterministic = False
 
 
-def get_tensorboard(logger):
+def get_tensorboard(logger, config):
     r"""Creates a SummaryWriter of Tensorboard that can log PyTorch models and metrics into a directory for
     visualization within the TensorBoard UI.
     For the convenience of the user, the naming rule of the SummaryWriter's log_dir is the same as the logger.
@@ -217,16 +217,17 @@ def get_tensorboard(logger):
     Returns:
         SummaryWriter: it will write out events and summaries to the event file.
     """
-    base_path = "log_tensorboard"
+    # base_path = "log_tensorboard"
+    base_path = "log_tb"
 
-    dir_name = None
-    for handler in logger.handlers:
-        if hasattr(handler, "baseFilename"):
-            dir_name = os.path.basename(getattr(handler, "baseFilename")).split(".")[0]
-            break
-    if dir_name is None:
-        dir_name = "{}-{}".format("model", get_local_time())
-
+    # dir_name = None
+    # for handler in logger.handlers:
+    #     if hasattr(handler, "baseFilename"):
+    #         dir_name = os.path.basename(getattr(handler, "baseFilename")).split(".")[0]
+    #         break
+    # if dir_name is None:
+    #     dir_name = "{}-{}".format("model", get_local_time())
+    dir_name = config["model"] + "/" + config["dataset"] + "/" + config['task_name'] + '-' + get_local_time()
     dir_path = os.path.join(base_path, dir_name)
     writer = SummaryWriter(dir_path)
     return writer

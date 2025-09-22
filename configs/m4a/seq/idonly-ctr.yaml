@@ -44,10 +44,10 @@ train_neg_sample_args: ~
 eval_args:
   split: {'LS': 'valid_and_test'}
   order: TO
-  mode:
-      valid: my_uni
-      test: my_uni
+mode: uni100
 
+metrics: ['AUC', 'LogLoss']
+valid_metric: AUC
 # topk: [10, 20, 40] 
 # user_inter_num_interval: [50,10000]
 # item_inter_num_interval: [50,10000]

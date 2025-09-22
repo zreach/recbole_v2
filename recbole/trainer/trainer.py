@@ -112,7 +112,7 @@ class Trainer(AbstractTrainer):
         super(Trainer, self).__init__(config, model)
 
         self.logger = getLogger()
-        self.tensorboard = get_tensorboard(self.logger)
+        self.tensorboard = get_tensorboard(self.logger, config)
         self.wandblogger = WandbLogger(config)
         self.learner = config["learner"]
         self.learning_rate = config["learning_rate"]
@@ -144,6 +144,9 @@ class Trainer(AbstractTrainer):
         self.evaluator = Evaluator(config)
         self.item_tensor = None
         self.tot_item_num = None
+        
+        self.global_step = 0
+        self.model.set_tensorboard_writer(self.tensorboard)
 
     def _build_optimizer(self, **kwargs):
         r"""Init the Optimizer
@@ -235,6 +238,7 @@ class Trainer(AbstractTrainer):
             train_data.sampler.set_epoch(epoch_idx)
 
         scaler = amp.GradScaler(enabled=self.enable_scaler)
+
         for batch_idx, interaction in enumerate(iter_data):
             interaction = interaction.to(self.device)
             self.optimizer.zero_grad()
@@ -265,6 +269,8 @@ class Trainer(AbstractTrainer):
                 clip_grad_norm_(self.model.parameters(), **self.clip_grad_norm)
             scaler.step(self.optimizer)
             scaler.update()
+            self.model.log_context_embedding_stats(self.global_step)
+            self.global_step += 1
             if self.gpu_available and show_progress:
                 iter_data.set_postfix_str(
                     set_color("GPU RAM: " + get_gpu_usage(self.device), "yellow")
