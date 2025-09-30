@@ -146,7 +146,10 @@ class Trainer(AbstractTrainer):
         self.tot_item_num = None
         
         self.global_step = 0
-        self.model.set_tensorboard_writer(self.tensorboard)
+
+        self.model.set_tensorboard_writer(self.tensorboard) if hasattr(
+            self.model, "set_tensorboard_writer"
+        ) else None
 
     def _build_optimizer(self, **kwargs):
         r"""Init the Optimizer
@@ -269,7 +272,10 @@ class Trainer(AbstractTrainer):
                 clip_grad_norm_(self.model.parameters(), **self.clip_grad_norm)
             scaler.step(self.optimizer)
             scaler.update()
-            self.model.log_context_embedding_stats(self.global_step)
+            self.model.log_context_embedding_stats(self.global_step) if hasattr(
+                self.model, "log_context_embedding_stats"
+            ) else None
+            # self.model.log
             self.global_step += 1
             if self.gpu_available and show_progress:
                 iter_data.set_postfix_str(

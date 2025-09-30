@@ -42,12 +42,12 @@ loss_type: CE #损失函数类型
 neg_my: true
 # train_neg_sample_args: ~
 train_neg_sample_args:
-    distribution: "uniform"
+    distribution: "popularity"
     sample_num: 1
 eval_args:
   split: {'LS': 'valid_and_test'}
   order: TO
-  mode: uni100
+  mode: pop100
 
 metrics: ['AUC', 'LogLoss']
 valid_metric: AUC

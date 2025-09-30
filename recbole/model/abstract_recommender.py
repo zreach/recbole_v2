@@ -161,7 +161,9 @@ class SequentialRecommender(AbstractRecommender):
         self.POS_ITEM_ID = self.ITEM_ID
         self.NEG_ITEM_ID = config["NEG_PREFIX"] + self.ITEM_ID
         self.max_seq_length = config["MAX_ITEM_LIST_LENGTH"]
+        self.n_users = dataset.num(self.USER_ID)
         self.n_items = dataset.num(self.ITEM_ID)
+        # self.token2id = dataset.field2token_id.get(self.ITEM_ID, {})
 
         # load parameters info
         self.device = config["device"]

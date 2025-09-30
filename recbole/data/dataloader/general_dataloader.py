@@ -40,9 +40,8 @@ class TrainDataLoader(NegSampleDataLoader):
         self.logger = getLogger()
         self._set_neg_sample_args(
             config, dataset, config["MODEL_INPUT_TYPE"], config["train_neg_sample_args"]
-        )
+        ) # dataset里没有，这里才有负采样
         self.sample_size = len(dataset)
-        # TODO 在这里对数据集负采样
         super().__init__(config, dataset, sampler, shuffle=shuffle)
 
     def _init_batch_size_and_step(self):
@@ -69,7 +68,78 @@ class TrainDataLoader(NegSampleDataLoader):
         index = np.array(index)
         data = self._dataset[index]
         transformed_data = self.transform(self._dataset, data) # equal
+        
+        # sample_num = 2
+    
+        # # 直接修改data中的每个tensor
+        # for field in data.interaction:
+        #     original_tensor = data.interaction[field]
+        #     # 直接在原tensor上进行重复操作
+        #     data.interaction[field] = original_tensor.repeat(sample_num, *([1] * (original_tensor.dim() - 1)))
+        
         return self._neg_sampling(transformed_data)
+        # return data
+    
+    def _neg_sampling_fake(self, data):
+        """
+        虚假的负采样方法，将数据的batch size按sample_num翻倍
+        
+        Args:
+            data (Interaction): 输入的交互数据
+        
+        Returns:
+            Interaction: batch size翻倍后的数据
+        """
+        # 获取negative sampling的倍数
+        if hasattr(self, 'neg_sample_args') and 'sample_num' in self.neg_sample_args:
+            if self.neg_sample_args['sample_num'] == 'none':
+                sample_num = 1
+            else:
+                sample_num = self.neg_sample_args['sample_num'] + 1  # +1 for positive sample
+        else:
+            sample_num = 2  # 默认翻倍
+        
+        # 获取原始batch size
+        original_batch_size = len(data)
+        new_batch_size = original_batch_size * sample_num
+        
+        # 创建新的交互数据字典
+        new_data_dict = {}
+        
+        for field in data.interaction:
+            original_tensor = data[field]
+            
+            # 重复tensor以达到新的batch size
+            if original_tensor.dim() == 1:
+                # 一维tensor直接重复
+                new_tensor = original_tensor.repeat(sample_num)
+            else:
+                # 多维tensor在第0维重复
+                repeat_sizes = [sample_num] + [1] * (original_tensor.dim() - 1)
+                new_tensor = original_tensor.repeat(repeat_sizes)
+            
+            new_data_dict[field] = new_tensor
+        
+        # 创建新的Interaction对象
+        new_data = Interaction(new_data_dict)
+        
+        return new_data
+    # def collate_fn(self, index):
+    #     index = np.array(index)
+    #     data = self._dataset[index]
+    #     # transformed_data = self.transform(self._dataset, data) # equal
+    #     # return self._neg_sampling(transformed_data)
+    #     return data
+    # def collate_fn(self, index):
+    #     index = np.array(index)
+        
+        # 返回随机值而不是实际的数据处理
+        # batch_size = len(index)
+        
+        # # 生成随机张量作为返回值
+        # random_data = torch.randn(batch_size, 64)  # 假设特征维度为64
+        
+        # return random_data
 
 
 class NegSampleEvalDataLoader(NegSampleDataLoader):
@@ -128,6 +198,7 @@ class NegSampleEvalDataLoader(NegSampleDataLoader):
             batch_num = 1
             new_batch_size = inters_num[0]
             for i in range(1, len(inters_num)):
+                
                 if new_batch_size + inters_num[i] > batch_size:
                     break
                 batch_num = i + 1
@@ -181,6 +252,25 @@ class NegSampleEvalDataLoader(NegSampleDataLoader):
             transformed_data = self.transform(self._dataset, data)
             cur_data = self._neg_sampling(transformed_data)
             return cur_data, None, None, None
+    # def collate_fn(self, index):
+    #     index = np.array(index)
+        
+    #     # 返回随机值而不是实际的数据处理
+    #     batch_size = len(index)
+        
+    #     # 生成随机的 cur_data (假设是 Interaction 对象)
+    #     random_data = torch.randn(batch_size, 10)  # 示例：随机张量
+        
+    #     # 生成随机的 idx_list
+    #     random_idx_list = torch.randint(0, 100, (batch_size,))
+        
+    #     # 生成随机的 positive_u
+    #     random_positive_u = torch.randint(0, 50, (batch_size,))
+        
+    #     # 生成随机的 positive_i
+    #     random_positive_i = torch.randint(0, 1000, (batch_size,))
+        
+    #     return random_data, random_idx_list, random_positive_u, random_positive_i
 
 
 class FullSortEvalDataLoader(AbstractDataLoader):

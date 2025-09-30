@@ -33,7 +33,7 @@ from recbole.model.layers import (
     ContextSeqEmbLayer,
     SequenceAttLayer,
 )
-from recbole.model.abstract_recommender import SequentialRecommender
+from recbole.model.abstract_recommender_my import SequentialRecommender
 
 
 class DIEN(SequentialRecommender):
@@ -120,7 +120,8 @@ class DIEN(SequentialRecommender):
 
     def _init_weights(self, module):
         if isinstance(module, nn.Embedding):
-            xavier_normal_(module.weight.data)
+            if module.weight.requires_grad:
+                xavier_normal_(module.weight.data)
         elif isinstance(module, nn.Linear):
             xavier_normal_(module.weight.data)
             if module.bias is not None:

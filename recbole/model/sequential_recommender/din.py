@@ -24,7 +24,7 @@ import torch
 import torch.nn as nn
 from torch.nn.init import xavier_normal_, constant_
 
-from recbole.model.abstract_recommender import SequentialRecommender
+from recbole.model.abstract_recommender_my import SequentialRecommender
 from recbole.model.layers import MLPLayers, SequenceAttLayer, ContextSeqEmbLayer
 from recbole.utils import InputType, FeatureType
 
@@ -105,7 +105,8 @@ class DIN(SequentialRecommender):
 
     def _init_weights(self, module):
         if isinstance(module, nn.Embedding):
-            xavier_normal_(module.weight.data)
+            if module.weight.requires_grad:
+                xavier_normal_(module.weight.data)
         elif isinstance(module, nn.Linear):
             xavier_normal_(module.weight.data)
             if module.bias is not None:
@@ -118,9 +119,10 @@ class DIN(SequentialRecommender):
         sparse_embedding, dense_embedding = self.embedding_layer(
             user, item_seq_next_item
         )
+        # sparse embedding: [B, T+1, num_feature, feature_dim]
         # concat the sparse embedding and float embedding
         feature_table = {}
-        for type in self.types:
+        for type in self.types: # user item
             feature_table[type] = []
             if sparse_embedding[type] is not None:
                 feature_table[type].append(sparse_embedding[type])
@@ -147,7 +149,7 @@ class DIN(SequentialRecommender):
         # input the DNN to get the prediction score
         din_in = torch.cat(
             [user_emb, target_item_feat_emb, user_emb * target_item_feat_emb], dim=-1
-        )
+        ) # 一个user 一个target 一个哈达玛积
         din_out = self.dnn_mlp_layers(din_in)
         preds = self.dnn_predict_layers(din_out)
 

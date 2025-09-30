@@ -13,7 +13,8 @@ from recbole.model.layers import FMEmbedding, FMFirstOrderLinear, FLEmbedding, M
 from tqdm import tqdm 
 
 class Aggregator(nn.Module):
-    def __init__(self, embedding_size, token2id, feature_dict, config, proj_method="linear", layer=-1, n_clusters=2, n_stage=2, mlp_dropout=0.2, mlp_size_list=None, n_users=None, n_items=None):
+    def __init__(self, embedding_size, token2id, feature_dict, config, proj_method="linear", layer=-1, n_clusters=2, n_stage=2, mlp_dropout=0.2, mlp_size_list=None, n_users=None, n_items=None, token_field_names=None, token_field_offsets=None, 
+             token_embedding_table=None, USER_ID=None):
         super().__init__()
         self.layer = layer
         self.proj_method = proj_method
@@ -25,7 +26,22 @@ class Aggregator(nn.Module):
         self.config = config
         self.n_users = n_users
         self.n_items = n_items
+
+        self.token_field_names = token_field_names
+        self.token_field_offsets = token_field_offsets
+        self.token_embedding_table = token_embedding_table
+        self.USER_ID = USER_ID
         
+        if proj_method == 'pre_gate' and self.token_field_names is not None and self.USER_ID is not None:
+            self.user_id_field_idx = None
+            print(self.token_field_names)
+            for i, field_name in enumerate(self.token_field_names):
+                if field_name == self.USER_ID:
+                    self.user_id_field_idx = i
+                    break
+            
+            if self.user_id_field_idx is None:
+                raise ValueError(f"USER_ID field {self.USER_ID} not found in token fields")
         # self.n_stage
 
         if len(feature_shape) == 1:
@@ -47,7 +63,7 @@ class Aggregator(nn.Module):
             raise ValueError(f"Feature dimension not supported: {len(feature_shape)}")
         self.feature_size = H
 
-        if layer == 'weighted_sum' or proj_method in ['transformer', 'moe', 'all', 'attention', 'attention_origin', 'attention_self', 'item_weight', 'rnn', 'attention_global', 'gate']:
+        if layer == 'weighted_sum' or proj_method in ['transformer', 'moe', 'all', 'attention', 'attention_origin', 'attention_self', 'item_weight', 'rnn', 'attention_global', 'gate', 'pre_gate', 'pre_moe']:
             self.weights = nn.Parameter(torch.ones((L, 1)), requires_grad=True)
 
             # 保存所有层的信息，不进行聚合
@@ -115,8 +131,199 @@ class Aggregator(nn.Module):
             size_list = [
                 H
             ] + mlp_size_list + [self.embedding_size]
-            self.net = MLPLayers(size_list, mlp_dropout)
-
+            print(size_list)
+            print(mlp_dropout)
+            self.net = MLPLayers(size_list, mlp_dropout, last_activation=False)
+        
+        elif proj_method == 'pre_gate':
+            # Pre-Gate方法：使用user_id学习L维权重，先加权特征再通过MLP
+            
+            # 直接使用现有的token_embedding_table中的user_id embedding
+            # 不需要额外创建user_gate_embedding
+            
+            # 找到user_id在token_field_names中的位置
+            self.user_id_field_idx = None
+            for i, field_name in enumerate(self.token_field_names):
+                if field_name == self.USER_ID:
+                    self.user_id_field_idx = i
+                    break
+            
+            if self.user_id_field_idx is None:
+                raise ValueError(f"USER_ID field {self.USER_ID} not found in token fields")
+            
+            # 新增：全局可学习权重
+            self.use_global_weights = config.get('use_global_weights', True)
+            if self.use_global_weights:
+                # 初始化全局L维权重参数
+                print('Using global learnable weights for pre_gate')
+                self.global_weights = nn.Parameter(torch.zeros(L))  # [L]
+                # 可选：全局权重的初始化方式
+                global_init_method = config.get('global_init_method', 'zeros')  # 'zeros', 'uniform', 'normal', 'ones'
+                if global_init_method == 'uniform':
+                    nn.init.uniform_(self.global_weights, -0.1, 0.1)
+                elif global_init_method == 'normal':
+                    nn.init.normal_(self.global_weights, 0.0, 0.1)
+                elif global_init_method == 'ones':
+                    nn.init.ones_(self.global_weights)
+                elif global_init_method == 'zeros':
+                    nn.init.zeros_(self.global_weights)
+                else:
+                    raise ValueError(f"Unknown global_init_method: {global_init_method}")
+            
+            # Gate网络：从user embedding映射到L维权重
+            gate_hidden_size = config.get('gate_hidden_size', self.embedding_size // 2)
+            
+            if gate_hidden_size > 0:
+                self.gate_network = nn.Sequential(
+                    nn.Linear(self.embedding_size, gate_hidden_size),
+                    nn.ReLU(),
+                    nn.Dropout(mlp_dropout),
+                    nn.Linear(gate_hidden_size, L)
+                )
+            else:
+                # 如果隐藏层大小为0，直接线性映射
+                self.gate_network = nn.Linear(self.embedding_size, L)
+            
+            # 权重组合方式
+            self.weight_combination = config.get('weight_combination', 'add')  # 'add', 'weighted_add', 'concat'
+            
+            if self.weight_combination == 'weighted_add':
+                # 可学习的组合系数
+                self.combination_alpha = nn.Parameter(torch.tensor(0.5))  # 用于控制全局权重和用户权重的比例
+                # alpha * global_weights + (1-alpha) * user_weights
+            elif self.weight_combination == 'concat':
+                # 如果是拼接模式，需要额外的网络来处理拼接后的权重
+                self.weight_fusion = nn.Sequential(
+                    nn.Linear(2 * L, L),
+                    nn.ReLU(),
+                    nn.Dropout(mlp_dropout),
+                    nn.Linear(L, L)
+                )
+            
+            # 权重归一化方式
+            self.gate_norm_method = config.get('gate_norm_method', 'softmax')  # 'softmax', 'sigmoid', 'none'
+            
+            # Gate温度参数（用于softmax）
+            self.gate_temperature = config.get('gate_temperature', 1.0)
+            
+            # Gate dropout
+            self.gate_dropout = config.get('gate_dropout', 0.0)
+            
+            # 特征聚合方式
+            self.feature_aggregation = config.get('feature_aggregation', 'weighted_sum')  # 'weighted_sum', 'weighted_concat'
+            
+            if self.feature_aggregation == 'weighted_sum':
+                # 加权求和后的特征维度仍为H
+                final_mlp_input_dim = H
+            elif self.feature_aggregation == 'weighted_concat':
+                # 将加权后的L个特征拼接
+                final_mlp_input_dim = L * H
+            else:
+                raise ValueError(f"Unknown feature_aggregation: {self.feature_aggregation}")
+            
+            # 最终MLP：处理加权后的特征
+            if mlp_size_list is None:
+                self.final_mlp = nn.Sequential(
+                    nn.Linear(final_mlp_input_dim, final_mlp_input_dim // 2),
+                    nn.ReLU(),
+                    nn.Dropout(mlp_dropout),
+                    nn.Linear(final_mlp_input_dim // 2, embedding_size)
+                )
+            else:
+                size_list = [final_mlp_input_dim] + mlp_size_list + [embedding_size]
+                self.final_mlp = MLPLayers(size_list, mlp_dropout, last_activation=False)
+            
+            # 输出单个特征
+            self.num_feature_filed = 1
+        elif proj_method == 'pre_moe':
+            # Pre-MoE方法：使用user_id学习L维权重，选择top1特征进入MLP
+            
+            # 直接使用现有的token_embedding_table中的user_id embedding
+            # 找到user_id在token_field_names中的位置
+            self.user_id_field_idx = None
+            for i, field_name in enumerate(self.token_field_names):
+                if field_name == self.USER_ID:
+                    self.user_id_field_idx = i
+                    break
+            
+            if self.user_id_field_idx is None:
+                raise ValueError(f"USER_ID field {self.USER_ID} not found in token fields")
+            
+            # 新增：全局可学习权重（可选）
+            self.use_global_weights = config.get('use_global_weights', True)
+            if self.use_global_weights:
+                # 初始化全局L维权重参数
+                self.global_weights = nn.Parameter(torch.zeros(L))  # [L]
+                # 全局权重的初始化方式
+                global_init_method = config.get('global_init_method', 'zeros')  # 'zeros', 'uniform', 'normal', 'ones'
+                if global_init_method == 'uniform':
+                    nn.init.uniform_(self.global_weights, -0.1, 0.1)
+                elif global_init_method == 'normal':
+                    nn.init.normal_(self.global_weights, 0.0, 0.1)
+                elif global_init_method == 'ones':
+                    nn.init.ones_(self.global_weights)
+                elif global_init_method == 'zeros':
+                    nn.init.zeros_(self.global_weights)
+                else:
+                    raise ValueError(f"Unknown global_init_method: {global_init_method}")
+            
+            # Gate网络：从user embedding映射到L维权重
+            gate_hidden_size = config.get('gate_hidden_size', self.embedding_size // 2)
+            
+            if gate_hidden_size > 0:
+                self.gate_network = nn.Sequential(
+                    nn.Linear(self.embedding_size, gate_hidden_size),
+                    nn.ReLU(),
+                    nn.Dropout(mlp_dropout),
+                    nn.Linear(gate_hidden_size, L)
+                )
+            else:
+                # 如果隐藏层大小为0，直接线性映射
+                self.gate_network = nn.Linear(self.embedding_size, L)
+            
+            # 权重组合方式（如果使用全局权重）
+            self.weight_combination = config.get('weight_combination', 'add')  # 'add', 'weighted_add', 'concat'
+            
+            if self.weight_combination == 'weighted_add':
+                # 可学习的组合系数
+                self.combination_alpha = nn.Parameter(torch.tensor(0.5))
+            elif self.weight_combination == 'concat':
+                # 如果是拼接模式，需要额外的网络来处理拼接后的权重
+                self.weight_fusion = nn.Sequential(
+                    nn.Linear(2 * L, L),
+                    nn.ReLU(),
+                    nn.Dropout(mlp_dropout),
+                    nn.Linear(L, L)
+                )
+            
+            # Gate温度参数（用于softmax）
+            self.gate_temperature = config.get('gate_temperature', 1.0)
+            
+            # Gate dropout
+            self.gate_dropout = config.get('gate_dropout', 0.0)
+            
+            # Top-k选择参数（对于pre_moe，固定为1）
+            self.topk = 1  # 只选择top1
+            
+            # 是否使用Gumbel-Softmax进行可微分的离散选择
+            self.use_gumbel = config.get('use_gumbel', False)
+            self.gumbel_temperature = config.get('gumbel_temperature', 1.0)
+            self.gumbel_hard = config.get('gumbel_hard', True)
+            
+            # 最终MLP：处理选中的单个特征
+            if mlp_size_list is None:
+                self.final_mlp = nn.Sequential(
+                    nn.Linear(H, H // 2),
+                    nn.ReLU(),
+                    nn.Dropout(mlp_dropout),
+                    nn.Linear(H // 2, embedding_size)
+                )
+            else:
+                size_list = [H] + mlp_size_list + [embedding_size]
+                self.final_mlp = MLPLayers(size_list, mlp_dropout, last_activation=False)
+            
+            # 输出单个特征
+            self.num_feature_filed = 1
         elif proj_method == 'gate':
             # Gate方法：先得到L个embedding，再用item_feature计算gate分数聚合
             
@@ -953,6 +1160,10 @@ class Aggregator(nn.Module):
             return self.get_global_attention_embeddings(interaction)
         elif self.proj_method == 'gate':
             return self.get_gate_embeddings(interaction)
+        elif self.proj_method == 'pre_gate':
+            return self.get_pre_gate_embeddings(interaction)
+        elif self.proj_method == 'pre_moe':
+            return self.get_pre_moe_embeddings(interaction)
         else:
             raise ValueError(f"Unknown aggregation method: {self.proj_method}")
     
@@ -1177,6 +1388,132 @@ class Aggregator(nn.Module):
         final_embedding = self.output_projection(pooled_output)  # [batch_size, embedding_size]
         
         return final_embedding.unsqueeze(1)  # [batch_size, 1, embedding_size]
+    # ...existing code...
+    def get_pre_gate_embeddings(self, interaction):
+        """
+        使用Pre-Gate方法：用user_id学习L维权重，结合全局权重，先加权特征再通过MLP
+        Args:
+            interaction: 包含tracks_id和user_id的交互数据
+        Returns:
+            embeddings: tensor of shape [batch_size, 1, embedding_size]
+        """
+        track_ids = interaction['tracks_id']
+        user_ids = interaction['user_id']
+        
+        # 获取所有层特征
+        all_features = self.id2feats(track_ids)  # [batch_size, L*H]
+        batch_size = all_features.size(0)
+        L = self.L
+        H = self.feature_dim
+        features = all_features.view(batch_size, L, H)  # [batch_size, L, H]
+        
+        # 第一步：获取user embedding
+        if hasattr(self, 'user_id_field_idx') and self.user_id_field_idx is not None:
+            # 使用现有的token_embedding_table获取用户embedding
+            user_token_field = user_ids.unsqueeze(1)  # [batch_size, 1]
+            user_offset = self.token_field_offsets[self.user_id_field_idx]
+            user_embedding_input = user_token_field + user_offset  # [batch_size, 1]
+            user_embedding = self.token_embedding_table.embedding(user_embedding_input).squeeze(1)  # [batch_size, embedding_size]
+        else:
+            # 备用方法：通过完整的token fields获取
+            token_fields = []
+            for field_name in self.token_field_names:
+                if field_name == self.USER_ID:
+                    token_fields.append(interaction[field_name].unsqueeze(1))
+                else:
+                    if field_name in interaction:
+                        token_fields.append(interaction[field_name].unsqueeze(1))
+                    else:
+                        dummy_field = torch.zeros_like(user_ids).unsqueeze(1)
+                        token_fields.append(dummy_field)
+            
+            if len(token_fields) > 0:
+                token_fields_tensor = torch.cat(token_fields, dim=1)  # [batch_size, num_token_field]
+                token_embeddings = self.token_embedding_table(token_fields_tensor)  # [batch_size, num_token_field, embed_dim]
+                
+                user_field_idx = None
+                for i, field_name in enumerate(self.token_field_names):
+                    if field_name == self.USER_ID:
+                        user_field_idx = i
+                        break
+                
+                if user_field_idx is not None:
+                    user_embedding = token_embeddings[:, user_field_idx, :]  # [batch_size, embedding_size]
+                else:
+                    raise ValueError(f"USER_ID field {self.USER_ID} not found in token fields")
+            else:
+                raise ValueError("No token fields available to get user embedding")
+        
+        # 第二步：通过gate网络学习用户特定的L维权重
+        user_gate_weights = self.gate_network(user_embedding)  # [batch_size, L]
+        
+        # 第三步：结合全局权重和用户权重
+        if self.use_global_weights:
+            # 将全局权重扩展到batch维度
+            global_weights_expanded = self.global_weights.unsqueeze(0).expand(batch_size, -1)  # [batch_size, L]
+            
+            if self.weight_combination == 'add':
+                # 简单相加
+                combined_weights = user_gate_weights + global_weights_expanded  # [batch_size, L]
+            elif self.weight_combination == 'weighted_add':
+                # 加权相加，使用可学习的alpha参数
+                alpha = torch.sigmoid(self.combination_alpha)  # 将alpha限制在[0,1]范围
+                combined_weights = alpha * global_weights_expanded + (1 - alpha) * user_gate_weights  # [batch_size, L]
+            elif self.weight_combination == 'concat':
+                # 拼接后通过网络融合
+                concatenated_weights = torch.cat([global_weights_expanded, user_gate_weights], dim=-1)  # [batch_size, 2*L]
+                combined_weights = self.weight_fusion(concatenated_weights)  # [batch_size, L]
+            else:
+                raise ValueError(f"Unknown weight_combination: {self.weight_combination}")
+        else:
+            # 不使用全局权重，直接使用用户权重
+            combined_weights = user_gate_weights  # [batch_size, L]
+        
+        # 第四步：权重归一化
+        if self.gate_norm_method == 'softmax':
+            # 使用softmax确保权重和为1
+            if self.gate_temperature != 1.0:
+                combined_weights = combined_weights / self.gate_temperature
+            gate_weights = torch.softmax(combined_weights, dim=-1)  # [batch_size, L]
+        elif self.gate_norm_method == 'sigmoid':
+            # 使用sigmoid将权重限制在[0,1]范围
+            gate_weights = torch.sigmoid(combined_weights)  # [batch_size, L]
+        elif self.gate_norm_method == 'l1_norm':
+            # L1归一化，权重和为1
+            gate_weights = torch.abs(combined_weights)  # 确保非负
+            gate_weights = gate_weights / (torch.sum(gate_weights, dim=-1, keepdim=True) + 1e-8)  # [batch_size, L]
+        elif self.gate_norm_method == 'l2_norm':
+            # L2归一化
+            gate_weights = combined_weights / (torch.norm(combined_weights, p=2, dim=-1, keepdim=True) + 1e-8)  # [batch_size, L]
+        elif self.gate_norm_method == 'none':
+            # 不进行归一化，直接使用原始权重
+            gate_weights = combined_weights
+        else:
+            raise ValueError(f"Unknown gate normalization method: {self.gate_norm_method}")
+        
+        # 应用gate dropout（训练时）
+        if self.training and self.gate_dropout > 0:
+            gate_weights = torch.dropout(gate_weights, self.gate_dropout, train=True)
+        
+        # 第五步：使用权重对特征进行加权
+        gate_weights = gate_weights.unsqueeze(-1)  # [batch_size, L, 1]
+        weighted_features = features * gate_weights  # [batch_size, L, H]
+        
+        # 第六步：根据聚合方式处理加权特征
+        if self.feature_aggregation == 'weighted_sum':
+            # 加权求和：将L个加权特征求和
+            aggregated_features = torch.sum(weighted_features, dim=1)  # [batch_size, H]
+        elif self.feature_aggregation == 'weighted_concat':
+            # 加权拼接：将L个加权特征拼接
+            aggregated_features = weighted_features.view(batch_size, -1)  # [batch_size, L * H]
+        else:
+            raise ValueError(f"Unknown feature_aggregation: {self.feature_aggregation}")
+        
+        # 第七步：通过最终MLP得到embedding
+        final_embedding = self.final_mlp(aggregated_features)  # [batch_size, embedding_size]
+        
+        return final_embedding.unsqueeze(1)  # [batch_size, 1, embedding_size]
+    
     def get_global_attention_embeddings(self, interaction):
         """
         使用K个全局query向量（维度为H），先自注意力，再与特征进行互注意力，最后每个query通过独立MLP得到最终embedding
@@ -1629,6 +1966,122 @@ class Aggregator(nn.Module):
             weighted_embeddings = self.output_projection(weighted_embeddings)  # [batch_size, L, embedding_size]
             
             return weighted_embeddings  # [batch_size, L, embedding_size]
+    def get_pre_moe_embeddings(self, interaction):
+        """
+        使用Pre-MoE方法：用user_id学习L维权重，选择top1特征进入MLP
+        Args:
+            interaction: 包含tracks_id和user_id的交互数据
+        Returns:
+            embeddings: tensor of shape [batch_size, 1, embedding_size]
+        """
+        track_ids = interaction['tracks_id']
+        user_ids = interaction['user_id']
+        
+        # 获取所有层特征
+        all_features = self.id2feats(track_ids)  # [batch_size, L*H]
+        batch_size = all_features.size(0)
+        L = self.L
+        H = self.feature_dim
+        features = all_features.view(batch_size, L, H)  # [batch_size, L, H]
+        
+        # 第一步：获取user embedding
+        if hasattr(self, 'user_id_field_idx') and self.user_id_field_idx is not None:
+            # 使用现有的token_embedding_table获取用户embedding
+            user_token_field = user_ids.unsqueeze(1)  # [batch_size, 1]
+            user_offset = self.token_field_offsets[self.user_id_field_idx]
+            user_embedding_input = user_token_field + user_offset  # [batch_size, 1]
+            user_embedding = self.token_embedding_table.embedding(user_embedding_input).squeeze(1)  # [batch_size, embedding_size]
+        else:
+            # 备用方法：通过完整的token fields获取
+            token_fields = []
+            for field_name in self.token_field_names:
+                if field_name == self.USER_ID:
+                    token_fields.append(interaction[field_name].unsqueeze(1))
+                else:
+                    if field_name in interaction:
+                        token_fields.append(interaction[field_name].unsqueeze(1))
+                    else:
+                        dummy_field = torch.zeros_like(user_ids).unsqueeze(1)
+                        token_fields.append(dummy_field)
+            
+            if len(token_fields) > 0:
+                token_fields_tensor = torch.cat(token_fields, dim=1)  # [batch_size, num_token_field]
+                token_embeddings = self.token_embedding_table(token_fields_tensor)  # [batch_size, num_token_field, embed_dim]
+                
+                user_field_idx = None
+                for i, field_name in enumerate(self.token_field_names):
+                    if field_name == self.USER_ID:
+                        user_field_idx = i
+                        break
+                
+                if user_field_idx is not None:
+                    user_embedding = token_embeddings[:, user_field_idx, :]  # [batch_size, embedding_size]
+                else:
+                    raise ValueError(f"USER_ID field {self.USER_ID} not found in token fields")
+            else:
+                raise ValueError("No token fields available to get user embedding")
+        
+        # 第二步：通过gate网络学习用户特定的L维权重
+        user_gate_weights = self.gate_network(user_embedding)  # [batch_size, L]
+        
+        # 第三步：结合全局权重和用户权重（如果启用）
+        if self.use_global_weights:
+            # 将全局权重扩展到batch维度
+            global_weights_expanded = self.global_weights.unsqueeze(0).expand(batch_size, -1)  # [batch_size, L]
+            
+            if self.weight_combination == 'add':
+                # 简单相加
+                combined_weights = user_gate_weights + global_weights_expanded  # [batch_size, L]
+            elif self.weight_combination == 'weighted_add':
+                # 加权相加，使用可学习的alpha参数
+                alpha = torch.sigmoid(self.combination_alpha)  # 将alpha限制在[0,1]范围
+                combined_weights = alpha * global_weights_expanded + (1 - alpha) * user_gate_weights  # [batch_size, L]
+            elif self.weight_combination == 'concat':
+                # 拼接后通过网络融合
+                concatenated_weights = torch.cat([global_weights_expanded, user_gate_weights], dim=-1)  # [batch_size, 2*L]
+                combined_weights = self.weight_fusion(concatenated_weights)  # [batch_size, L]
+            else:
+                raise ValueError(f"Unknown weight_combination: {self.weight_combination}")
+        else:
+            # 不使用全局权重，直接使用用户权重
+            combined_weights = user_gate_weights  # [batch_size, L]
+        
+        # 应用温度参数
+        if self.gate_temperature != 1.0:
+            combined_weights = combined_weights / self.gate_temperature
+        
+        # 应用gate dropout（训练时）
+        if self.training and self.gate_dropout > 0:
+            combined_weights = torch.dropout(combined_weights, self.gate_dropout, train=True)
+        
+        # 第四步：选择top1特征
+        if self.use_gumbel and self.training:
+            # 使用Gumbel-Softmax进行可微分的离散选择
+            from torch.nn.functional import gumbel_softmax
+            # Gumbel-Softmax会返回one-hot向量的软近似
+            gumbel_weights = gumbel_softmax(combined_weights, tau=self.gumbel_temperature, hard=self.gumbel_hard, dim=-1)  # [batch_size, L]
+            
+            if self.gumbel_hard:
+                # Hard模式下，选中的特征权重为1，其他为0
+                selected_features = torch.sum(features * gumbel_weights.unsqueeze(-1), dim=1)  # [batch_size, H]
+            else:
+                # Soft模式下，使用软权重
+                selected_features = torch.sum(features * gumbel_weights.unsqueeze(-1), dim=1)  # [batch_size, H]
+        else:
+            # 使用硬选择：直接选择top1
+            _, top_indices = torch.max(combined_weights, dim=-1)  # [batch_size] - 每个样本的top1索引
+            
+            # 向量化选择：使用gather操作
+            batch_indices = torch.arange(batch_size, device=features.device).unsqueeze(1)  # [batch_size, 1]
+            top_indices = top_indices.unsqueeze(1)  # [batch_size, 1]
+            
+            # 选择对应的特征
+            selected_features = features[batch_indices, top_indices].squeeze(1)  # [batch_size, H]
+        
+        # 第五步：通过最终MLP得到embedding
+        final_embedding = self.final_mlp(selected_features)  # [batch_size, embedding_size]
+        
+        return final_embedding.unsqueeze(1)  # [batch_size, 1, embedding_size]
     def get_attention_origin_embeddings(self, interaction):
         """
         使用用户注意力机制对每层特征进行加权聚合

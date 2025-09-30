@@ -29,3 +29,6 @@ from recbole.model.sequential_recommender.srgnn import SRGNN
 from recbole.model.sequential_recommender.stamp import STAMP
 from recbole.model.sequential_recommender.transrec import TransRec
 from recbole.model.sequential_recommender.fearec import FEARec
+
+from recbole.model.sequential_recommender.dmin import DMIN
+from recbole.model.sequential_recommender.din_cb import DIN_CB

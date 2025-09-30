@@ -436,6 +436,8 @@ class SequentialRecommender(AbstractRecommender):
         self.NEG_ITEM_ID = config["NEG_PREFIX"] + self.ITEM_ID
         self.max_seq_length = config["MAX_ITEM_LIST_LENGTH"]
         self.n_items = dataset.num(self.ITEM_ID)
+        self.n_users = dataset.num(self.USER_ID)
+        self.token2id = dataset.field2token_id
 
         # load parameters info
         self.device = config["device"]
@@ -551,42 +553,7 @@ class ContextRecommender(AbstractRecommender):
         self.use_audio = config['use_audio']
         self.use_text = config['use_text']
 
-        if self.use_cb:
-            
-            if self.use_audio:
-                a_feature_path = config['a_feature_path']
-                with open(a_feature_path, 'rb') as fp:
-                    music_features_array = pickle.load(fp)
-                
-                self.a_aggregator = Aggregator(
-                    embedding_size = self.embedding_size,
-                    proj_method = config['proj_method'],
-                    token2id = self.token2id,
-                    feature_dict = music_features_array,
-                    config=config,
-                    layer=config['afeat_layer'] if 'afeat_layer' in config else -1,
-                    mlp_dropout= config['wav_dropout'] if 'wav_dropout' in config else 0.2,
-                    mlp_size_list= config['wav_mlp_sizes'] if 'wav_mlp_sizes' in config else [512, 32],
-                    n_clusters = config['n_clusters'] if 'n_clusters' in config else 16,
-                    n_stage = config['n_stage'] if 'n_stage' in config else 2,
-                    n_users = self.n_users,
-                    n_items = self.n_items
-                )
-
-            if self.use_text:
-                t_feature_path = config['t_feature_path']
-                with open(t_feature_path, 'rb') as fp:
-                    text_features_array = pickle.load(fp)
-
-                self.text_embedding_size = list(text_features_array.values())[0].shape[-1]
-                text_features_array['[PAD]'] = np.zeros((self.text_embedding_size))
-                text_features = torch.zeros((len(self.token2id['tracks_id']), self.text_embedding_size ))
-            
-
-            if self.use_text:
-                self.t_feats = text_features
-                self.id2tfeats = nn.Embedding.from_pretrained(text_features)
-                self.id2tfeats.requires_grad_(False)
+        
         
         if self.double_tower:
             self.user_field_names = dataset.fields(
@@ -675,6 +642,47 @@ class ContextRecommender(AbstractRecommender):
         else:
             self.first_order_linear = FMFirstOrderLinear(config, dataset)
         
+        if self.use_cb:
+            
+            if self.use_audio:
+                a_feature_path = config['a_feature_path']
+                with open(a_feature_path, 'rb') as fp:
+                    music_features_array = pickle.load(fp)
+                
+                self.a_aggregator = Aggregator(
+                    embedding_size = self.embedding_size,
+                    proj_method = config['proj_method'],
+                    token2id = self.token2id,
+                    feature_dict = music_features_array,
+                    config=config,
+                    layer=config['afeat_layer'] if 'afeat_layer' in config else -1,
+                    mlp_dropout= config['wav_dropout'] if 'wav_dropout' in config else 0.2,
+                    mlp_size_list= config['wav_mlp_sizes'] if 'wav_mlp_sizes' in config else [512, 32],
+                    n_clusters = config['n_clusters'] if 'n_clusters' in config else 16,
+                    n_stage = config['n_stage'] if 'n_stage' in config else 2,
+                    n_users = self.n_users,
+                    n_items = self.n_items,
+                    # 新增：传入ContextRecommender的相关信息
+                    token_field_names = self.token_field_names,
+                    token_field_offsets = self.token_field_offsets if hasattr(self, 'token_field_offsets') else None,
+                    token_embedding_table = self.token_embedding_table if hasattr(self, 'token_embedding_table') else None,
+                    USER_ID = self.USER_ID
+                )
+
+            if self.use_text:
+                t_feature_path = config['t_feature_path']
+                with open(t_feature_path, 'rb') as fp:
+                    text_features_array = pickle.load(fp)
+
+                self.text_embedding_size = list(text_features_array.values())[0].shape[-1]
+                text_features_array['[PAD]'] = np.zeros((self.text_embedding_size))
+                text_features = torch.zeros((len(self.token2id['tracks_id']), self.text_embedding_size ))
+            
+
+            if self.use_text:
+                self.t_feats = text_features
+                self.id2tfeats = nn.Embedding.from_pretrained(text_features)
+                self.id2tfeats.requires_grad_(False)
         if self.use_audio:
             # wav_dropout = config['wav_dropout'] if 'wav_dropout' in config else 0.2
             # size_list = [
@@ -691,6 +699,67 @@ class ContextRecommender(AbstractRecommender):
             self.text_mlp = MLPLayers(size_list, text_dropout, last_activation = None )
             # self.text_fc = nn.Linear(1024, self.embedding_size)
             self.num_feature_field += 1
+
+    def _log_aggregator_mlp_stats(self, step):
+        """Log MLP statistics in audio aggregator"""
+        if not hasattr(self, 'a_aggregator') or self.tb_writer is None:
+            return
+            
+        # Log MLP layers in aggregator
+        for name, module in self.a_aggregator.named_modules():
+            # if isinstance(module, MLPLayers):
+            #     self._log_mlp_stats(module, f'audio_aggregator_{name}', step)
+            if isinstance(module, nn.Linear):
+                self._log_linear_layer_stats(module, f'audio_aggregator_{name}', step)
+
+    def _log_mlp_stats(self, mlp_module, prefix, step):
+        """Log statistics for MLP layers"""
+        if self.tb_writer is None or mlp_module is None:
+            return
+            
+        # Log each linear layer in the MLP
+        if hasattr(mlp_module, 'mlp_layers'):
+            for i, layer in enumerate(mlp_module.mlp_layers):
+                if isinstance(layer, nn.Linear):
+                    self._log_linear_layer_stats(layer, f'{prefix}_layer_{i}', step)
+
+    def _log_linear_layer_stats(self, linear_layer, prefix, step):
+        """Log simple statistics for a linear layer"""
+        if self.tb_writer is None:
+            return
+
+        # Log weight norms
+        weight_data = linear_layer.weight.data
+        weight_l2_norm = torch.norm(weight_data, p=2)
+        weight_l1_norm = torch.norm(weight_data, p=1)
+        weight_linf_norm = torch.norm(weight_data, p=float('inf'))
+        
+        self.tb_writer.add_scalar(f'{prefix}/weight_norm_l2', weight_l2_norm.item(), step)
+        self.tb_writer.add_scalar(f'{prefix}/weight_norm_l1', weight_l1_norm.item(), step)
+        self.tb_writer.add_scalar(f'{prefix}/weight_norm_linf', weight_linf_norm.item(), step)
+        
+        # Log bias norms if exists
+        if linear_layer.bias is not None:
+            bias_data = linear_layer.bias.data
+            bias_l2_norm = torch.norm(bias_data, p=2)
+            self.tb_writer.add_scalar(f'{prefix}/bias_norm_l2', bias_l2_norm.item(), step)
+        
+        # Log gradients if available
+        if linear_layer.weight.grad is not None:
+            weight_grad_data = linear_layer.weight.grad.data
+            weight_grad_l2_norm = torch.norm(weight_grad_data, p=2)
+            weight_grad_l1_norm = torch.norm(weight_grad_data, p=1)
+            weight_grad_linf_norm = torch.norm(weight_grad_data, p=float('inf'))
+            
+            self.tb_writer.add_scalar(f'{prefix}/weight_grad_norm_l2', weight_grad_l2_norm.item(), step)
+            self.tb_writer.add_scalar(f'{prefix}/weight_grad_norm_l1', weight_grad_l1_norm.item(), step)
+            self.tb_writer.add_scalar(f'{prefix}/weight_grad_norm_linf', weight_grad_linf_norm.item(), step)
+            
+            # Log bias gradients if exists
+            if linear_layer.bias is not None and linear_layer.bias.grad is not None:
+                bias_grad_data = linear_layer.bias.grad.data
+                bias_grad_l2_norm = torch.norm(bias_grad_data, p=2)
+                self.tb_writer.add_scalar(f'{prefix}/bias_grad_norm_l2', bias_grad_l2_norm.item(), step)
 
     def log_context_embedding_stats(self, step=None):
         """Log context-specific embedding statistics"""
@@ -713,15 +782,15 @@ class ContextRecommender(AbstractRecommender):
         
         # Log audio aggregator embeddings if available
         if hasattr(self, 'a_aggregator') and self.use_audio:
-            if hasattr(self.a_aggregator, 'embedding_tables'):
-                for i, embedding_table in enumerate(self.a_aggregator.embedding_tables):
-                    self._log_embedding_detailed_stats(embedding_table, f'audio_cluster_embedding_{i}', step)
+            # if hasattr(self.a_aggregator, 'embedding_tables'):
+            #     for i, embedding_table in enumerate(self.a_aggregator.embedding_tables):
+            #         self._log_embedding_detailed_stats(embedding_table, f'audio_cluster_embedding_{i}', step)
             
-            # Log other audio-related embeddings in aggregator
+            # # Log other audio-related embeddings in aggregator
             for name, module in self.a_aggregator.named_modules():
                 if isinstance(module, nn.Embedding):
                     self._log_embedding_detailed_stats(module, f'audio_aggregator_{name}', step)
-
+            self._log_aggregator_mlp_stats(step)
     def reg_emb_loss(self):
         # 先默认是给embedding的正则化
         reg_term = 0

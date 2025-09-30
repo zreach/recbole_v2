@@ -1,0 +1,28 @@
+embedding_size: 10              # (int) The embedding size of features.
+mlp_hidden_size: [256,256,256]  # (list of int) The hidden size of MLP layers. 
+dropout_prob: 0.0               # (float) The dropout rate.
+pooling_mode: 'mean'            # (str) Pooling mode of sequence data.
+gru_type: 'AUGRU'               # (str) GRU type of Interest Evolving Layer. 
+alpha: 1.0                      # (float) Weight to balance the interest representation and CTR prediction.
+# 基础音频配置
+use_cb: true
+use_item_id: false
+use_audio: true
+a_feature_path: 'dataset/m4a/m4a-muq.pkl'
+proj_method: 'mlp'
+afeat_layer: -1
+audio_fusion_method: 'concat'
+wav_mlp_sizes: [512]
+wav_dropout: 0.2
+
+# MLP融合配置
+# use_audio: true
+# audio_fusion_method: 'mlp'
+# proj_method: 'pre_gate'
+# gate_hidden_size: 64
+# feature_aggregation: 'weighted_sum'
+
+# # 相加融合配置
+# use_audio: true
+# audio_fusion_method: 'add'
+# proj_method: 'attention'

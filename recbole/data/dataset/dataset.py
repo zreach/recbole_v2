@@ -845,7 +845,156 @@ class Dataset(torch.utils.data.Dataset):
                     self.inter_feat.drop(
                         self.inter_feat.index[dropped_inter], inplace=True
                     )
-
+    def _remove_history_duplicates_before_split(self, k):
+        """Remove duplicate items from user history before the last k interactions.
+        
+        Args:
+            k (int): Number of last interactions to consider for removing duplicates from history.
+        """
+        if self.uid_field is None or self.iid_field is None:
+            return
+            
+        self.logger.info(f"Removing duplicate items from user history before last {k} interactions")
+        
+        # 检查inter_feat的类型，如果是Interaction需要转换为pandas处理
+        if isinstance(self.inter_feat, Interaction):
+            # 转换为DataFrame进行处理
+            inter_df = pd.DataFrame()
+            for field in self.inter_feat.interaction:
+                field_data = self.inter_feat[field]
+                if hasattr(field_data, 'cpu'):
+                    field_data = field_data.cpu()
+                
+                # 处理不同类型的字段
+                if len(field_data.shape) == 1:
+                    # 一维数组，直接转换
+                    inter_df[field] = field_data.numpy()
+                else:
+                    # 多维数组，可能是序列特征，跳过或特殊处理
+                    if field in [self.uid_field, self.iid_field, self.time_field]:
+                        # 对于关键字段，如果是多维的，取第一列或报错
+                        if field_data.shape[1] == 1:
+                            inter_df[field] = field_data.numpy().flatten()
+                        else:
+                            raise ValueError(f"Field {field} has unexpected shape {field_data.shape}")
+                    else:
+                        # 非关键字段，序列特征，暂时跳过
+                        self.logger.warning(f"Skipping field {field} with shape {field_data.shape} in history duplicate removal")
+                        continue
+        else:
+            inter_df = self.inter_feat.copy()
+        
+        # 检查必要字段是否存在
+        if self.uid_field not in inter_df.columns or self.iid_field not in inter_df.columns:
+            self.logger.warning("Required fields (uid_field or iid_field) not available for history duplicate removal")
+            return
+        
+        # 按时间排序（如果有时间字段）
+        if self.time_field and self.time_field in inter_df.columns:
+            sort_fields = [self.uid_field, self.time_field]
+        else:
+            sort_fields = [self.uid_field]
+        
+        # 获取排序后的数据
+        self.logger.info("Sorting interactions by user and time...")
+        sorted_inter_df = inter_df.sort_values(sort_fields).reset_index(drop=True)
+        
+        # 使用向量化操作优化去重过程
+        self.logger.info("Identifying duplicate interactions to remove...")
+        
+        # 将数据转换为更高效的格式
+        user_ids = sorted_inter_df[self.uid_field].values
+        item_ids = sorted_inter_df[self.iid_field].values
+        
+        # 获取每个用户的起始和结束索引
+        user_starts = {}
+        user_ends = {}
+        unique_users = np.unique(user_ids)
+        
+        # 使用numpy的where函数快速找到每个用户的索引范围
+        for user_id in unique_users:
+            user_mask = user_ids == user_id
+            user_indices = np.where(user_mask)[0]
+            user_starts[user_id] = user_indices[0]
+            user_ends[user_id] = user_indices[-1] + 1
+        
+        # 使用集合操作进行快速去重
+        indices_to_remove = set()
+        total_users = len(unique_users)
+        
+        # 添加进度条
+        from tqdm import tqdm
+        
+        self.logger.info(f"Processing {total_users} users for duplicate removal...")
+        
+        for i, user_id in enumerate(tqdm(unique_users, desc="Removing duplicates", unit="users")):
+            start_idx = user_starts[user_id]
+            end_idx = user_ends[user_id]
+            user_length = end_idx - start_idx
+            
+            if user_length <= k:
+                continue
+                
+            # 获取该用户的物品ID数组
+            user_items = item_ids[start_idx:end_idx]
+            
+            # 获取最后k个交互的物品
+            last_k_items = set(user_items[-k:])
+            
+            # 在前面的交互中查找这些物品（向量化操作）
+            history_items = user_items[:-k]
+            history_indices = np.arange(start_idx, end_idx - k)
+            
+            # 使用numpy的isin进行快速匹配
+            duplicate_mask = np.isin(history_items, list(last_k_items))
+            duplicate_indices = history_indices[duplicate_mask]
+            
+            # 添加到移除列表
+            indices_to_remove.update(duplicate_indices)
+        
+        # 移除重复的交互
+        if indices_to_remove:
+            original_len = len(sorted_inter_df)
+            total_removed = len(indices_to_remove)
+            
+            self.logger.info(f"Removing {total_removed} duplicate interactions...")
+            
+            # 创建保留的索引掩码（更高效）
+            keep_mask = np.ones(len(sorted_inter_df), dtype=bool)
+            keep_mask[list(indices_to_remove)] = False
+            
+            # 如果原始数据是Interaction，需要基于索引重新构造
+            if isinstance(self.inter_feat, Interaction):
+                # 从原始的Interaction中选择保留的索引
+                keep_indices = np.where(keep_mask)[0]
+                filtered_interaction = {}
+                for field in self.inter_feat.interaction:
+                    field_data = self.inter_feat[field][keep_indices]
+                    filtered_interaction[field] = field_data
+                
+                self.inter_feat = Interaction(filtered_interaction)
+            else:
+                filtered_df = sorted_inter_df[keep_mask].reset_index(drop=True)
+                self.inter_feat = filtered_df
+            
+            self.logger.info(
+                f"Successfully removed {total_removed} duplicate interactions. "
+                # f"Dataset size: {original_len} -> {len(np.sum(keep_mask))}"
+            )
+        else:
+            self.logger.info("No duplicate interactions found to remove.")
+            
+            # 如果没有移除任何数据，但进行了排序，需要更新inter_feat
+            if isinstance(self.inter_feat, Interaction):
+                # 重新排序Interaction
+                sort_indices = sorted_inter_df.index.tolist()
+                sorted_interaction = {}
+                for field in self.inter_feat.interaction:
+                    field_data = self.inter_feat[field][sort_indices]
+                    sorted_interaction[field] = field_data
+                self.inter_feat = Interaction(sorted_interaction)
+            else:
+                self.inter_feat = sorted_inter_df
     def _remove_duplication(self):
         """Remove duplications in inter_feat.
 
@@ -1737,6 +1886,7 @@ class Dataset(torch.utils.data.Dataset):
         Returns:
             list: List of index that has been split.
         """
+        # 对于序列数据，先增强，再留一
         next_index = [[] for _ in range(leave_one_num + 1)]
         for index in grouped_index:
             index = list(index)
@@ -1792,6 +1942,111 @@ class Dataset(torch.utils.data.Dataset):
         next_df = [self.inter_feat[index] for index in next_index]
         next_ds = [self.copy(_) for _ in next_df]
         return next_ds
+    # def leave_one_out_my(self, group_by, leave_one_mode):
+    #     """`Split interaction records by leave one out strategy.
+
+    #     Args:
+    #         group_by (str): Field name that interaction records should grouped by before splitting.
+    #         leave_one_mode (str): The way to leave one out. It can only take three values:
+    #             'valid_and_test', 'valid_only' and 'test_only'.
+
+    #     Returns:
+    #         list: List of :class:`~Dataset`, whose interaction features has been split.
+    #     """
+    #     self.logger.debug(
+    #         f"leave one out, group_by=[{group_by}], leave_one_mode=[{leave_one_mode}]"
+    #     )
+    #     if group_by is None:
+    #         raise ValueError("leave one out strategy require a group field")
+
+    #     grouped_inter_feat_index = self._grouped_index(
+    #         self.inter_feat[group_by].numpy()
+    #     )
+    #     if leave_one_mode == "valid_and_test":
+    #         next_index = self._split_index_by_leave_one_out(
+    #             grouped_inter_feat_index, leave_one_num=2
+    #         )
+    #     elif leave_one_mode == "valid_only":
+    #         next_index = self._split_index_by_leave_one_out(
+    #             grouped_inter_feat_index, leave_one_num=1
+    #         )
+    #         next_index.append([])
+    #     elif leave_one_mode == "test_only":
+    #         next_index = self._split_index_by_leave_one_out(
+    #             grouped_inter_feat_index, leave_one_num=1
+    #         )
+    #         next_index = [next_index[0], [], next_index[1]]
+    #     else:
+    #         raise NotImplementedError(
+    #             f"The leave_one_mode [{leave_one_mode}] has not been implemented."
+    #         )
+
+    #     self._drop_unused_col()
+    #     next_df = [self.inter_feat[index] for index in next_index]
+        
+    #     # 移除训练集中与验证集/测试集相同的物品
+    #     if leave_one_mode in ["valid_and_test", "valid_only", "test_only"]:
+    #         next_df = self._remove_items_from_train_history(next_df, group_by, leave_one_mode)
+        
+    #     next_ds = [self.copy(_) for _ in next_df]
+    #     return next_ds
+
+    # def _remove_items_from_train_history(self, split_dfs, group_by, leave_one_mode):
+    #     """Remove items from training set that appear in validation/test sets for each user.
+        
+    #     Args:
+    #         split_dfs (list): List of DataFrames [train, valid, test]
+    #         group_by (str): Field name for grouping (usually user_id)
+    #         leave_one_mode (str): Leave one out mode
+            
+    #     Returns:
+    #         list: Modified DataFrames with items removed from training history
+    #     """
+    #     train_df = split_dfs[0]
+        
+    #     # 收集需要从训练集中移除的(user, item)对
+    #     items_to_remove = set()
+        
+    #     if leave_one_mode == "valid_and_test":
+    #         valid_df, test_df = split_dfs[1], split_dfs[2]
+    #         # 收集验证集和测试集中的(user, item)对
+    #         for _, row in valid_df.iterrows():
+    #             items_to_remove.add((row[group_by], row[self.iid_field]))
+    #         for _, row in test_df.iterrows():
+    #             items_to_remove.add((row[group_by], row[self.iid_field]))
+                
+    #     elif leave_one_mode == "valid_only":
+    #         valid_df = split_dfs[1]
+    #         # 收集验证集中的(user, item)对
+    #         for _, row in valid_df.iterrows():
+    #             items_to_remove.add((row[group_by], row[self.iid_field]))
+                
+    #     elif leave_one_mode == "test_only":
+    #         test_df = split_dfs[2]
+    #         # 收集测试集中的(user, item)对
+    #         for _, row in test_df.iterrows():
+    #             items_to_remove.add((row[group_by], row[self.iid_field]))
+        
+    #     # 从训练集中移除这些(user, item)对
+    #     if items_to_remove:
+    #         original_len = len(train_df)
+    #         # 创建过滤条件
+    #         mask = ~train_df.apply(
+    #             lambda row: (row[group_by], row[self.iid_field]) in items_to_remove, 
+    #             axis=1
+    #         )
+    #         train_df = train_df[mask].reset_index(drop=True)
+            
+    #         removed_count = original_len - len(train_df)
+    #         self.logger.info(
+    #             f"Removed {removed_count} duplicate (user, item) pairs from training set "
+    #             f"that appear in validation/test sets."
+    #         )
+            
+    #         # 更新分割后的数据
+    #         split_dfs[0] = train_df
+        
+    #     return split_dfs
 
     def shuffle(self):
         """Shuffle the interaction records inplace."""
@@ -1807,6 +2062,82 @@ class Dataset(torch.utils.data.Dataset):
         """
         self.inter_feat.sort(by=by, ascending=ascending)
 
+    # def build(self):
+    #     """Processing dataset according to evaluation setting, including Group, Order and Split.
+    #     See :class:`~recbole.config.eval_setting.EvalSetting` for details.
+
+    #     Returns:
+    #         list: List of built :class:`Dataset`.
+    #     """
+    #     self._change_feat_format()
+
+    #     if self.benchmark_filename_list is not None:
+    #         self._drop_unused_col()
+    #         cumsum = list(np.cumsum(self.file_size_list))
+    #         datasets = [
+    #             self.copy(self.inter_feat[start:end])
+    #             for start, end in zip([0] + cumsum[:-1], cumsum)
+    #         ]
+    #         return datasets
+
+    #     # ordering
+    #     ordering_args = self.config["eval_args"]["order"]
+    #     if ordering_args == "RO":
+    #         self.shuffle()
+    #     elif ordering_args == "TO":
+    #         self.sort(by=self.time_field)
+    #     else:
+    #         raise NotImplementedError(
+    #             f"The ordering_method [{ordering_args}] has not been implemented."
+    #         )
+        
+    #     k = self.config.get('remove_history_k', 2)  # 默认移除最后2个交互的历史重复
+    #     if k > 0:
+    #         self._remove_history_duplicates_before_split(k)
+        
+    #     # splitting & grouping
+    #     split_args = self.config["eval_args"]["split"]
+    #     if split_args is None:
+    #         raise ValueError("The split_args in eval_args should not be None.")
+    #     if not isinstance(split_args, dict):
+    #         raise ValueError(f"The split_args [{split_args}] should be a dict.")
+
+    #     split_mode = list(split_args.keys())[0]
+    #     assert len(split_args.keys()) == 1
+    #     group_by = self.config["eval_args"]["group_by"] # user 
+    #     if split_mode == "RS":
+    #         if not isinstance(split_args["RS"], list):
+    #             raise ValueError(f'The value of "RS" [{split_args}] should be a list.')
+    #         if group_by is None or group_by.lower() == "none":
+    #             datasets = self.split_by_ratio(split_args["RS"], group_by=None)
+    #         elif group_by == "user":
+    #             datasets = self.split_by_ratio(
+    #                 split_args["RS"], group_by=self.uid_field
+    #             )
+    #         else:
+    #             raise NotImplementedError(
+    #                 f"The grouping method [{group_by}] has not been implemented."
+    #             )
+    #     elif split_mode == "LS":
+    #         datasets = self.leave_one_out(
+    #             group_by=self.uid_field, leave_one_mode=split_args["LS"]
+    #         )
+    #     elif split_mode == "LS_my":
+    #         datasets = self.leave_one_out_my(
+    #             group_by=self.uid_field, leave_one_mode=split_args["LS_my"]
+    #         )
+    #     elif split_mode == "cold_item":
+    #         datasets = self.split_cold_start(
+    #             cold_item_ratio=self.config["eval_args"]["cold_item_ratio"],
+    #             ratios=split_args["cold_item"],
+    #             group_by=group_by,
+    #         )
+    #     else:
+    #         raise NotImplementedError(
+    #             f"The splitting_method [{split_mode}] has not been implemented."
+    #         )
+
+    #     return datasets
     def build(self):
         """Processing dataset according to evaluation setting, including Group, Order and Split.
         See :class:`~recbole.config.eval_setting.EvalSetting` for details.
@@ -1835,7 +2166,12 @@ class Dataset(torch.utils.data.Dataset):
             raise NotImplementedError(
                 f"The ordering_method [{ordering_args}] has not been implemented."
             )
-
+        
+        # 在分割之前执行历史去重
+        k = self.config.get('remove_history_k', 2)  # 默认移除最后2个交互的历史重复
+        if k > 0:
+            self._remove_history_duplicates_before_split(k)
+        
         # splitting & grouping
         split_args = self.config["eval_args"]["split"]
         if split_args is None:
@@ -1846,6 +2182,7 @@ class Dataset(torch.utils.data.Dataset):
         split_mode = list(split_args.keys())[0]
         assert len(split_args.keys()) == 1
         group_by = self.config["eval_args"]["group_by"] # user 
+        
         if split_mode == "RS":
             if not isinstance(split_args["RS"], list):
                 raise ValueError(f'The value of "RS" [{split_args}] should be a list.')
@@ -1859,9 +2196,18 @@ class Dataset(torch.utils.data.Dataset):
                 raise NotImplementedError(
                     f"The grouping method [{group_by}] has not been implemented."
                 )
+            
+            # RS 模式下也执行去重操作
+            if k > 0 and len(datasets) >= 2:
+                datasets = self._remove_items_from_ratio_split(datasets, k)
+                
         elif split_mode == "LS":
             datasets = self.leave_one_out(
                 group_by=self.uid_field, leave_one_mode=split_args["LS"]
+            )
+        elif split_mode == "LS_my":
+            datasets = self.leave_one_out_my(
+                group_by=self.uid_field, leave_one_mode=split_args["LS_my"]
             )
         elif split_mode == "cold_item":
             datasets = self.split_cold_start(
@@ -1876,6 +2222,85 @@ class Dataset(torch.utils.data.Dataset):
 
         return datasets
 
+    def _remove_items_from_ratio_split(self, datasets, k):
+        """Remove duplicate items from training set for RS (ratio split) mode.
+        
+        Args:
+            datasets (list): List of Dataset objects [train, valid, test]
+            k (int): Number of last interactions to consider
+            
+        Returns:
+            list: Modified datasets with items removed from training history
+        """
+        if len(datasets) < 2:
+            return datasets
+            
+        train_dataset = datasets[0]
+        
+        # 收集验证集和测试集中的(user, item)对
+        items_to_remove = set()
+        
+        for i in range(1, len(datasets)):
+            dataset = datasets[i]
+            if len(dataset.inter_feat) > 0:
+                # 处理Interaction类型的数据
+                if isinstance(dataset.inter_feat, Interaction):
+                    user_ids = dataset.inter_feat[self.uid_field].numpy()
+                    item_ids = dataset.inter_feat[self.iid_field].numpy()
+                else:
+                    user_ids = dataset.inter_feat[self.uid_field].values
+                    item_ids = dataset.inter_feat[self.iid_field].values
+                    
+                for user_id, item_id in zip(user_ids, item_ids):
+                    items_to_remove.add((user_id, item_id))
+        
+        if not items_to_remove:
+            self.logger.info("No items to remove from training set in RS mode.")
+            return datasets
+        
+        # 从训练集中移除这些(user, item)对
+        original_len = len(train_dataset.inter_feat)
+        
+        if isinstance(train_dataset.inter_feat, Interaction):
+            # 处理Interaction类型
+            user_ids = train_dataset.inter_feat[self.uid_field].numpy()
+            item_ids = train_dataset.inter_feat[self.iid_field].numpy()
+            
+            # 创建保留的索引掩码
+            keep_mask = np.ones(len(user_ids), dtype=bool)
+            for i, (user_id, item_id) in enumerate(zip(user_ids, item_ids)):
+                if (user_id, item_id) in items_to_remove:
+                    keep_mask[i] = False
+            
+            keep_indices = np.where(keep_mask)[0]
+            
+            # 重新构造Interaction
+            filtered_interaction = {}
+            for field in train_dataset.inter_feat.interaction:
+                field_data = train_dataset.inter_feat[field][keep_indices]
+                filtered_interaction[field] = field_data
+            
+            train_dataset.inter_feat = Interaction(filtered_interaction)
+            
+        else:
+            # 处理DataFrame类型
+            mask = ~train_dataset.inter_feat.apply(
+                lambda row: (row[self.uid_field], row[self.iid_field]) in items_to_remove, 
+                axis=1
+            )
+            train_dataset.inter_feat = train_dataset.inter_feat[mask].reset_index(drop=True)
+        
+        removed_count = original_len - len(train_dataset.inter_feat)
+        self.logger.info(
+            f"Removed {removed_count} duplicate (user, item) pairs from training set "
+            f"in RS mode. Dataset size: {original_len} -> {len(train_dataset.inter_feat)}"
+        )
+        
+        # 更新第一个数据集
+        datasets[0] = train_dataset
+        
+        return datasets
+    
     def save(self):
         """Saving this :class:`Dataset` object to :attr:`config['checkpoint_dir']`."""
         save_dir = self.config["checkpoint_dir"]

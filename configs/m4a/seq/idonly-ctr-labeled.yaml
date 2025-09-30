@@ -40,14 +40,14 @@ loss_type: CE #损失函数类型
     # sample_num: 1
 
 neg_my: true
-# train_neg_sample_args: ~
-train_neg_sample_args:
-    distribution: "uniform"
-    sample_num: 1
+train_neg_sample_args: ~
+# train_neg_sample_args:
+#     distribution: "uniform"
+#     sample_num: 1
 eval_args:
   split: {'LS': 'valid_and_test'}
   order: TO
-  mode: uni100
+  mode: labeled
 
 metrics: ['AUC', 'LogLoss']
 valid_metric: AUC

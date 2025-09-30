@@ -19,7 +19,7 @@ load_col:
     item: [item_id]
 
 user_inter_num_interval: [5,1000000]
-item_inter_num_interval: [5,1000000] 
+item_inter_num_interval: [5,1000000]
 
 # training settings
 epochs: 20 #训练的最大轮数
