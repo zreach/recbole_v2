@@ -452,6 +452,7 @@ class RepeatableSampler(AbstractSampler):
 
 
 class SeqSampler(AbstractSampler):
+    # 好像只用在DIENdataset
     """:class:`SeqSampler` is used to sample negative item sequence.
 
     Args:

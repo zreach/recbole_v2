@@ -11,6 +11,7 @@ import pickle
 from sklearn.cluster import KMeans
 from recbole.model.layers import FMEmbedding, FMFirstOrderLinear, FLEmbedding, MLPLayers
 from tqdm import tqdm 
+import torch.nn.functional as F
 
 class Aggregator(nn.Module):
     def __init__(self, embedding_size, token2id, feature_dict, config, proj_method="linear", layer=-1, n_clusters=2, n_stage=2, mlp_dropout=0.2, mlp_size_list=None, n_users=None, n_items=None, token_field_names=None, token_field_offsets=None, 
@@ -63,7 +64,7 @@ class Aggregator(nn.Module):
             raise ValueError(f"Feature dimension not supported: {len(feature_shape)}")
         self.feature_size = H
 
-        if layer == 'weighted_sum' or proj_method in ['transformer', 'moe', 'all', 'attention', 'attention_origin', 'attention_self', 'item_weight', 'rnn', 'attention_global', 'gate', 'pre_gate', 'pre_moe']:
+        if layer == 'weighted_sum' or proj_method in ['transformer', 'moe', 'all', 'attention', 'attention_origin', 'attention_self', 'item_weight', 'rnn', 'attention_global', 'gate', 'pre_gate', 'pre_moe', 'attention_new']:
             self.weights = nn.Parameter(torch.ones((L, 1)), requires_grad=True)
 
             # 保存所有层的信息，不进行聚合
@@ -433,6 +434,49 @@ class Aggregator(nn.Module):
             else:
                 self.final_fusion = nn.Identity()
                 
+        elif proj_method == 'attention_new':
+            self.attention_dim = config.get('attention_dim', 64)
+            self.num_layers = L
+            self.layer_feature_dim = H
+            self.num_feature_filed = 1
+            # self.Wq_layers = nn.ModuleList([
+            # nn.Linear(H, self.attention_dim, bias=False)
+            # for _ in range(L)
+            # ])
+
+            self.wq = nn.Linear(H, self.attention_dim, bias=False)
+            self.wk = nn.Linear(H, self.attention_dim, bias=False)
+            # self.Wk_layers = nn.ModuleList([
+            # nn.Linear(H, self.attention_dim, bias=False)
+            # for _ in range(L)
+            # ])
+
+            self.temperature = config.get('attention_temperature', 1.0)
+    
+            # 最终的MLP，将加权后的特征映射到embedding_size
+            mlp_input_dim = self.layer_feature_dim
+            mlp_hidden_sizes = config.get('audio_mlp_sizes', [256])
+            
+            mlp_layers = []
+            input_dim = mlp_input_dim
+            for hidden_size in mlp_hidden_sizes:
+                mlp_layers.extend([
+                    nn.Linear(input_dim, hidden_size),
+                    nn.ReLU(),
+                    nn.Dropout(config.get('audio_dropout', 0.2))
+                ])
+                input_dim = hidden_size
+            
+            # 最后一层映射到embedding_size
+            mlp_layers.append(nn.Linear(input_dim, embedding_size))
+            self.final_mlp = nn.Sequential(*mlp_layers)
+            
+            # # 初始化所有权重
+            # self.apply(self._init_weights)
+            
+            # 专门初始化注意力权重
+            # self._init_attention_weights()
+            
         elif proj_method == 'transformer':
             from torch.nn import MultiheadAttention, LayerNorm
 
@@ -1166,7 +1210,254 @@ class Aggregator(nn.Module):
             return self.get_pre_moe_embeddings(interaction)
         else:
             raise ValueError(f"Unknown aggregation method: {self.proj_method}")
+        
+    def get_audio_features(self, item_ids):
+        """获取item的原始音频特征 - 适配 (L, H) 格式"""
+        layer_features = {f'layer_{i}': [] for i in range(self.num_layers)}
+        
+        for item_id in item_ids:
+            item_id = item_id.item() if isinstance(item_id, torch.Tensor) else item_id
+            
+            # 从id2feats获取特征
+            features = self.id2feats(torch.tensor([item_id], device=next(self.parameters()).device))  # [1, L*H]
+            features = features.view(self.num_layers, self.layer_feature_dim)  # [L, H]
+            
+            # 分解每一层的特征
+            for layer_idx in range(self.num_layers):
+                layer_feat = features[layer_idx]  # [H]
+                layer_features[f'layer_{layer_idx}'].append(layer_feat)
+        
+        # 转换为tensor并移到正确的设备
+        device = next(self.parameters()).device
+        for layer_name in layer_features:
+            layer_features[layer_name] = torch.stack(layer_features[layer_name]).to(device)
+        
+        return layer_features
+
+    def forward_sequence(self, item_seq_next_item):
+        """
+        新的序列处理方法
+        item_seq_next_item: 形状为 (B, T) 的tensor，最后一个为target item
+        """
+        batch_size, seq_len = item_seq_next_item.shape
+        
+        # 分离history和target
+        history_items = item_seq_next_item[:, :-1]  # (B, T-1)
+        target_items = item_seq_next_item[:, -1]    # (B,)
+        
+        batch_embeddings = []
+        
+        for batch_idx in range(batch_size):
+            # 获取当前batch的history和target
+            history_ids = history_items[batch_idx].cpu().tolist()  # (T-1,)
+            target_id = target_items[batch_idx].item()
+            
+            # 过滤掉padding的0值
+            history_ids = [id for id in history_ids if id != 0]
+            
+            if len(history_ids) == 0:
+                # 如果没有history，直接使用target item的特征
+                target_features = self.get_audio_features([target_id])
+                concatenated_features = []
+                for layer_idx in range(self.num_layers):
+                    layer_name = f'layer_{layer_idx}'
+                    concatenated_features.append(target_features[layer_name][0])  # [layer_feature_dim]
+                
+                concat_feat = torch.cat(concatenated_features, dim=0)  # [num_layers * layer_feature_dim]
+            else:
+                # 获取target和history的音频特征
+                target_features = self.get_audio_features([target_id])
+                history_features = self.get_audio_features(history_ids)
+                
+                # 计算每一层的注意力权重和加权特征
+                weighted_features = []
+                
+                for layer_idx in range(self.num_layers):
+                    layer_name = f'layer_{layer_idx}'
+                    
+                    # target item的特征作为query
+                    target_feat = target_features[layer_name][0].unsqueeze(0)  # [1, layer_feature_dim]
+                    
+                    # history items的特征作为key
+                    history_feat = history_features[layer_name]  # [len(history_ids), layer_feature_dim]
+                    
+                    # 使用对应层的Wq和Wk矩阵
+                    q = self.Wq_layers[layer_idx](target_feat)  # [1, attention_dim]
+                    k = self.Wk_layers[layer_idx](history_feat)  # [len(history_ids), attention_dim]
+                    
+                    # 计算注意力分数
+                    scores = torch.matmul(q, k.transpose(0, 1)) / self.temperature  # [1, len(history_ids)]
+                    scores = scores.squeeze(0)  # [len(history_ids)]
+                    
+                    # 应用softmax得到注意力权重
+                    attention_weights = F.softmax(scores, dim=0)  # [len(history_ids)]
+                    
+                    # 对history特征进行加权聚合
+                    attention_weights = attention_weights.unsqueeze(1)  # [len(history_ids), 1]
+                    weighted_history_feat = torch.sum(history_feat * attention_weights, dim=0)  # [layer_feature_dim]
+                    
+                    # 将加权后的history特征与target特征结合（这里可以选择不同的结合方式）
+                    # 方案1: 直接使用加权后的history特征
+                    final_layer_feat = weighted_history_feat
+                    
+                    # 方案2: target特征与加权history特征的平均
+                    # final_layer_feat = (target_feat.squeeze(0) + weighted_history_feat) / 2
+                    
+                    # 方案3: 只使用target特征作为query得到的加权结果
+                    # final_layer_feat = weighted_history_feat
+                    
+                    weighted_features.append(final_layer_feat)
+                
+                # 拼接所有层的特征
+                concat_feat = torch.cat(weighted_features, dim=0)  # [num_layers * layer_feature_dim]
+            
+            batch_embeddings.append(concat_feat)
+        
+        # 堆叠batch中的所有embeddings
+        concatenated_features = torch.stack(batch_embeddings)  # [batch_size, num_layers * layer_feature_dim]
+        
+        # 通过最终的MLP得到embedding
+        final_embeddings = self.final_mlp(concatenated_features)  # [batch_size, embedding_size]
+        
+        # 增加一个维度以匹配RecBole的期望格式
+        final_embeddings = final_embeddings.unsqueeze(1)  # [batch_size, 1, embedding_size]
+        
+        return final_embeddings
     
+    def get_sequence_embedding(self, item_seq_next_item):
+        B, T = item_seq_next_item.shape
+
+        all_items = item_seq_next_item.flatten()
+        all_features = self.id2feats(all_items)  # [B*T, L*H]
+        all_features = all_features.view(B, T, self.L, self.feature_dim)  # [B, T, L, H]
+
+        target_features = all_features[:, -1, :, :]  # [B, L, H]
+        history_features = all_features[:, :-1, :, :]  # [B, T-1, L, H]
+
+        q = self.wq(target_features)  # [B, L, attention_dim]
+        k = self.wk(history_features).view(B, T - 1, self.L, -1)  # [B, T-1, L, attention_dim]
+        v = history_features.view(B, T - 1, self.L, self.feature_dim)  # [B, T-1, L, H]
+
+        scores = torch.einsum('blh,btlh->btl', q, k) / self.temperature  # [B, T-1, L]
+
+        attention_weights = torch.softmax(scores, dim=1)  # [B, T-1, L]
+        weighted_features = torch.einsum('btl,btlh->bth', attention_weights, v)  # [B, T-1, H]
+        history_embs = self.final_mlp(weighted_features) # [B, T-1, embedding_size]
+
+        target_features = target_features.view(B, self.L, self.feature_dim)  # [B, L, H]
+        target_features = target_features.mean(dim=1)  # [B, H]
+        target_emb = self.final_mlp(target_features)  # [B, embedding_size]
+
+        final_embs = torch.cat([history_embs, target_emb.unsqueeze(1)], dim=1)  # [B, T, embedding_size]
+        return final_embs  # [B, T, embedding_size]
+        # pass
+
+    def forward_sequence_advanced(self, item_seq_next_item):
+        """
+        改进版序列处理方法 - 对每个位置的num_layers个特征进行注意力加权
+        item_seq_next_item: 形状为 (B, T) 的tensor
+        Returns: [batch_size, T, embedding_size] - 每个位置的embedding
+        """
+        batch_size, seq_len = item_seq_next_item.shape
+        device = item_seq_next_item.device
+        
+        # 获取所有unique item ids
+        all_items = item_seq_next_item.flatten()
+        unique_items = torch.unique(all_items[all_items != 0])
+        
+        if len(unique_items) == 0:
+            # 如果没有有效的item，返回零向量
+            return torch.zeros(batch_size, seq_len, self.embedding_size, device=device)
+        
+        # 批量获取所有需要的特征
+        unique_features = self.id2feats(unique_items)  # [num_unique_items, L*H]
+        num_unique = unique_features.size(0)
+        L = self.L
+        H = self.feature_dim
+        unique_features = unique_features.view(num_unique, L, H)  # [num_unique_items, L, H]
+        
+        # 创建item_id到feature index的映射
+        item_to_idx = {item.item(): idx for idx, item in enumerate(unique_items)}
+        item_to_idx[0] = -1  # padding用-1表示
+        
+        # 处理每个序列位置
+        sequence_embeddings = []
+        
+        for t in range(seq_len):
+            batch_embeddings = []
+            
+            for batch_idx in range(batch_size):
+                item_id = item_seq_next_item[batch_idx, t].item()
+                
+                if item_id == 0 or item_id not in item_to_idx:
+                    # padding或者不存在的item，使用零向量
+                    final_embedding = torch.zeros(self.embedding_size, device=device)
+                    batch_embeddings.append(final_embedding)
+                    continue
+                
+                # 获取当前item的特征
+                item_idx = item_to_idx[item_id]
+                item_features = unique_features[item_idx]  # [L, H]
+                
+                # 对于每个位置，使用注意力机制聚合历史信息
+                if t == 0:
+                    # 第一个位置没有历史，直接拼接所有层特征
+                    concatenated_features = item_features.view(-1)  # [L*H]
+                else:
+                    # 使用历史进行注意力聚合
+                    history_ids = item_seq_next_item[batch_idx, :t]  # 历史序列
+                    
+                    # 获取有效的history indices
+                    history_indices = []
+                    for hist_id in history_ids:
+                        hist_id = hist_id.item()
+                        if hist_id != 0 and hist_id in item_to_idx:
+                            history_indices.append(item_to_idx[hist_id])
+                    
+                    if len(history_indices) == 0:
+                        # 没有有效history，直接拼接当前item特征
+                        concatenated_features = item_features.view(-1)  # [L*H]
+                    else:
+                        # 获取history特征
+                        history_features = unique_features[history_indices]  # [len(history_indices), L, H]
+                        
+                        # 计算注意力加权特征
+                        weighted_features = []
+                        
+                        for layer_idx in range(L):
+                            # target特征作为query
+                            target_feat = item_features[layer_idx].unsqueeze(0)  # [1, H]
+                            
+                            # history特征作为key和value
+                            history_feat = history_features[:, layer_idx, :]  # [len(history_indices), H]
+                            
+                            # 计算注意力
+                            q = self.Wq_layers[layer_idx](target_feat)  # [1, attention_dim]
+                            k = self.Wk_layers[layer_idx](history_feat)  # [len(history_indices), attention_dim]
+                            
+                            # 注意力分数
+                            scores = torch.matmul(q, k.transpose(0, 1)) / self.temperature  # [1, len(history_indices)]
+                            attention_weights = torch.softmax(scores.squeeze(0), dim=0)  # [len(history_indices)]
+                            
+                            # 加权聚合
+                            weighted_feat = torch.sum(history_feat * attention_weights.unsqueeze(1), dim=0)  # [H]
+                            weighted_features.append(weighted_feat)
+                        
+                        # 拼接所有层
+                        concatenated_features = torch.cat(weighted_features, dim=0)  # [L*H]
+                
+                # 通过MLP得到最终embedding
+                final_embedding = self.final_mlp(concatenated_features)  # [embedding_size]
+                batch_embeddings.append(final_embedding)
+            
+            # 堆叠当前时间步的所有batch
+            step_embeddings = torch.stack(batch_embeddings)  # [batch_size, embedding_size]
+            sequence_embeddings.append(step_embeddings)
+        
+        # 堆叠所有时间步
+        final_embeddings = torch.stack(sequence_embeddings, dim=1)  # [batch_size, seq_len, embedding_size]
+        
+        return final_embeddings
     def _compute_gate_scores_for_gate_method(self, features, track_ids, user_ids):
         """
         为Gate方法计算门控分数

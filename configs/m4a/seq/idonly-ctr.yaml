@@ -41,6 +41,7 @@ loss_type: CE #损失函数类型
 
 neg_my: true
 # train_neg_sample_args: ~
+train_batch_size: 2048
 train_neg_sample_args:
     distribution: "uniform"
     sample_num: 1

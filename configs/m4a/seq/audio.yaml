@@ -2,6 +2,8 @@
 use_cb: true
 
 use_audio: true
-afeat_layer: 10
+afeat_layer: -1
+proj_method: mlp
+wav_mlp_sizes: [512]
+wav_dropout: 0.2
 a_feature_path: "dataset/m4a/m4a-muq.pkl"
-wav_mlp_sizes: [64]

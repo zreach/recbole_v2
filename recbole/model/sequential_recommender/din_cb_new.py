@@ -57,8 +57,6 @@ class DIN_CB(SequentialRecommender):
         self.pooling_mode = config["pooling_mode"]
         self.dropout_prob = config["dropout_prob"]
 
-        self.attention_new = config.get('attention_new', False)
-
         # 新增：是否使用item_id和音频特征相关配置
         self.use_item_id = not config.get('no_itemid', True)
         self.use_audio = config.get('use_audio', False)
@@ -71,7 +69,7 @@ class DIN_CB(SequentialRecommender):
         self.types = ["user", "item"]
         self.user_feat = dataset.get_user_feature()
         self.item_feat = dataset.get_item_feature()
-        self.proj_method = config.get('proj_method', 'mlp')
+
         # 新增：初始化音频aggregator
         if self.use_audio:
             # 加载音频特征
@@ -226,6 +224,12 @@ class DIN_CB(SequentialRecommender):
         max_length = item_seq_next_item.shape[1]
         batch_size = item_seq_next_item.shape[0]
 
+        # 分离序列和目标item
+        # item_seq = item_seq_next_item[:, :-1]  # [batch_size, seq_len]
+        # target_items = item_seq_next_item[:, -1]  # [batch_size]
+        
+        # final_item_features = []
+
         # 传统特征
         if self.use_item_id:
             sparse_embedding, dense_embedding = self.embedding_layer(user, item_seq_next_item)
@@ -253,26 +257,23 @@ class DIN_CB(SequentialRecommender):
 
         # 音频特征（分步处理，节省显存）
         if self.use_audio:
-            if self.proj_method == 'attention_new':
-                audio_item_features = self.a_aggregator.get_sequence_embedding(item_seq_next_item)
-            else:
-                audio_item_features = []
-                for t in range(max_length):
-                    items_t = item_seq_next_item[:, t]  # [batch_size]
-                    valid_mask = items_t != 0
-                    if valid_mask.any():
-                        valid_items = items_t[valid_mask]
-                        audio_interaction = {'tracks_id': valid_items}
-                        if hasattr(self.a_aggregator, 'user_id_field_idx') and self.a_aggregator.user_id_field_idx is not None:
-                            audio_interaction['user_id'] = user[valid_mask]
-                        audio_emb = self.get_audio_embeddings(audio_interaction)  # [valid_num, audio_dim]
-                        # 填充到batch_size
-                        audio_feat_t = torch.zeros(batch_size, self.audio_embedding_dim, device=self.device)
-                        audio_feat_t[valid_mask] = audio_emb
-                    else:
-                        audio_feat_t = torch.zeros(batch_size, self.audio_embedding_dim, device=self.device)
-                    audio_item_features.append(audio_feat_t.unsqueeze(1))  # [batch_size, 1, audio_dim]
-                audio_item_features = torch.cat(audio_item_features, dim=1)  # [batch_size, max_length, audio_dim]
+            audio_item_features = []
+            for t in range(max_length):
+                items_t = item_seq_next_item[:, t]  # [batch_size]
+                valid_mask = items_t != 0
+                if valid_mask.any():
+                    valid_items = items_t[valid_mask]
+                    audio_interaction = {'tracks_id': valid_items}
+                    if hasattr(self.a_aggregator, 'user_id_field_idx') and self.a_aggregator.user_id_field_idx is not None:
+                        audio_interaction['user_id'] = user[valid_mask]
+                    audio_emb = self.get_audio_embeddings(audio_interaction)  # [valid_num, audio_dim]
+                    # 填充到batch_size
+                    audio_feat_t = torch.zeros(batch_size, self.audio_embedding_dim, device=self.device)
+                    audio_feat_t[valid_mask] = audio_emb
+                else:
+                    audio_feat_t = torch.zeros(batch_size, self.audio_embedding_dim, device=self.device)
+                audio_item_features.append(audio_feat_t.unsqueeze(1))  # [batch_size, 1, audio_dim]
+            audio_item_features = torch.cat(audio_item_features, dim=1)  # [batch_size, max_length, audio_dim]
         else:
             audio_item_features = None
 
@@ -315,7 +316,7 @@ class DIN_CB(SequentialRecommender):
         
         # 获取所有item的表示
         all_item_features = self.get_item_representations(user, item_seq_next_item)
-        # print(all_item_features.shape)  # [batch_size, max_length + 1, final_item_dim]
+        
         # 分离序列特征和目标item特征
         item_feat_list, target_item_feat_emb = all_item_features.split([max_length, 1], dim=1)
         target_item_feat_emb = target_item_feat_emb.squeeze(1)
