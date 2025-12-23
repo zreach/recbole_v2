@@ -32,3 +32,4 @@ from recbole.model.sequential_recommender.fearec import FEARec
 
 from recbole.model.sequential_recommender.dmin import DMIN
 from recbole.model.sequential_recommender.din_cb import DIN_CB
+from recbole.model.sequential_recommender.transformer4rec import Transformer4Rec
